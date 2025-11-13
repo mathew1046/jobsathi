@@ -1,0 +1,7 @@
+# Frontend - JobSathi
+## Ignore dependencies and build files
+node_modules/
+dist/
+.env.local
+.DS_Store
+*.log
