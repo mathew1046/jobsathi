@@ -1,7 +1,7 @@
 # jobsathi_api.py
-# ASR-only backend - Translation handled by frontend
+# ASR + LLM-powered resume builder backend
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
 import tempfile
 import os
@@ -9,8 +9,11 @@ import asyncio
 import torch
 import torchaudio
 from transformers import AutoModel
+import httpx
+from typing import List, Dict, Any
+import json
 
-app = FastAPI(title="JobSathi API - ASR Only", version="5.0.0")
+app = FastAPI(title="JobSathi API - Resume Builder", version="6.0.0")
 
 # CORS
 app.add_middleware(
@@ -25,6 +28,11 @@ app.add_middleware(
 # Device and model IDs
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 ASR_MODEL_ID = "ai4bharat/indic-conformer-600m-multilingual"
+
+# OpenRouter LLM configuration
+OPENROUTER_API_KEY = "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"
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+LLM_MODEL = "deepseek/deepseek-chat-v3.1:free"
 
 # -----------------------
 # Globals and locks
@@ -157,9 +165,129 @@ async def transcribe(audio: UploadFile = File(...), source_language: str = Form(
             os.unlink(tmp_path)
             print(f"Temp file removed: {tmp_path}")
 
+# -----------------------
+# LLM Integration
+# -----------------------
+
+async def call_openrouter(prompt: str, system_message: str = "You are a helpful assistant that extracts structured data from text.") -> Dict[str, Any]:
+    """Call OpenRouter API with given prompt and return JSON response."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                OPENROUTER_URL,
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": LLM_MODEL,
+                    "messages": [
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": prompt}
+                    ]
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+            
+            # Try to parse JSON from response
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                # If response contains markdown code blocks, extract JSON
+                if "```json" in content:
+                    json_str = content.split("```json")[1].split("```")[0].strip()
+                    return json.loads(json_str)
+                elif "```" in content:
+                    json_str = content.split("```")[1].split("```")[0].strip()
+                    return json.loads(json_str)
+                return {"raw_response": content}
+    except Exception as e:
+        print(f"OpenRouter API error: {e}")
+        raise HTTPException(status_code=500, detail=f"LLM API failed: {str(e)}")
+
+@app.post("/ask_llm")
+async def ask_llm(payload: Dict[str, Any] = Body(...)):
+    """
+    Accepts transcript and question, sends to LLM, returns structured JSON.
+    Payload: { "transcript": "...", "question": "...", "field": "..." }
+    """
+    transcript = payload.get("transcript", "")
+    question = payload.get("question", "")
+    field = payload.get("field", "answer")
+    
+    if not transcript:
+        raise HTTPException(status_code=400, detail="Transcript is required")
+    
+    prompt = f"""Question: {question}
+User's answer (in English): {transcript}
+
+Extract the requested resume field from this text and return ONLY a small JSON object.
+The JSON should have the key '{field}' with the extracted value.
+If multiple values exist, use an array. Keep response concise.
+
+Example format: {{"name": "Ramesh Kumar"}}
+
+Return ONLY the JSON, no explanations."""
+    
+    result = await call_openrouter(prompt)
+    return {
+        "status": "success",
+        "data": result
+    }
+
+@app.post("/build_profile")
+async def build_profile(payload: Dict[str, Any] = Body(...)):
+    """
+    Accepts array of Q&A JSON responses, merges and normalizes into final profile.
+    Payload: { "qa_responses": [{ "question_id": 1, "field": "name", "extracted_data": {...} }, ...] }
+    """
+    qa_responses = payload.get("qa_responses", [])
+    if not qa_responses:
+        raise HTTPException(status_code=400, detail="Q&A responses are required")
+    
+    # Merge all Q&A responses - extract data from nested structure
+    merged_data = {}
+    for item in qa_responses:
+        # Each item has structure: { "question_id": 1, "field": "name", "extracted_data": {...} }
+        if "extracted_data" in item and isinstance(item["extracted_data"], dict):
+            merged_data.update(item["extracted_data"])
+        elif "field" in item and any(k for k in item.keys() if k not in ["question_id", "field", "question", "transcript"]):
+            # If data is at top level (legacy format)
+            field_data = {k: v for k, v in item.items() if k not in ["question_id", "field", "question", "transcript"]}
+            merged_data.update(field_data)
+    
+    prompt = f"""Here is raw resume data collected from a user interview:
+{json.dumps(merged_data, indent=2)}
+
+Please normalize and structure this into a clean professional resume JSON with these fields:
+- name (string)
+- role (string, job title/desired position)
+- experience_years (number)
+- experience_details (array of objects with: company, role, duration, description)
+- skills (array of strings)
+- languages (array of strings)
+- location (string)
+- education (array of objects with: degree, institution, year)
+- certifications (array of strings)
+- phone (string)
+- email (string)
+- summary (string, 2-3 sentences professional summary)
+- extras (object for any additional relevant info)
+
+Return ONLY a valid JSON object with all available fields. Use null for missing fields."""
+    
+    result = await call_openrouter(prompt, system_message="You are an expert resume builder that creates structured JSON profiles.")
+    
+    return {
+        "status": "success",
+        "profile": result
+    }
+
 @app.get("/")
 async def root():
-    return {"message": "JobSathi API - ASR Only", "version": "5.0.0", "docs": "/docs"}
+    return {"message": "JobSathi API - Resume Builder", "version": "6.0.0", "docs": "/docs"}
 
 @app.get("/health")
 async def health_check():

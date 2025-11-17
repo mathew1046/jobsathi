@@ -1,27 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import AudioRecorder from './components/AudioRecorder'
+import { RESUME_QUESTIONS } from './constants/questions'
 import './App.css'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
-
-// Browser-compatible translation using MyMemory API (free, no key required)
-const translateText = async (text, sourceLang, targetLang = 'en') => {
-  if (!text || sourceLang === targetLang) return text
-  
-  try {
-    const response = await fetch(
-      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sourceLang}|${targetLang}`
-    )
-    const data = await response.json()
-    
-    if (data.responseStatus === 200 && data.responseData) {
-      return data.responseData.translatedText
-    }
-    throw new Error('Translation failed')
-  } catch (err) {
-    console.error('Translation error:', err)
-    return text
-  }
-}
 
 const DEFAULT_LANGUAGES = [
   { code: 'hi', label: 'Hindi' },
@@ -37,351 +19,653 @@ const DEFAULT_LANGUAGES = [
   { code: 'en', label: 'English' }
 ]
 
-const FEATURE_CHIPS = [
-  { icon: '🌈', text: 'Aurora-grade UI' },
-  { icon: '🧠', text: 'Chunked IndicTrans' },
-  { icon: '🎧', text: 'Conformer ASR' }
-]
-
-const PROCESS_STEPS = [
-  'Upload audio',
-  'Conformer decoding',
-  'Chunk & translate',
-  'English transcript ready'
-]
-
 function App() {
-  const [file, setFile] = useState(null)
-  const [transcription, setTranscription] = useState('')
-  const [originalText, setOriginalText] = useState('')
-  const [detectedLanguage, setDetectedLanguage] = useState('')
-  const [chunkCount, setChunkCount] = useState(0)
+  // UI State
+  const [darkMode, setDarkMode] = useState(false)
+  const [currentStep, setCurrentStep] = useState('welcome') // welcome, qa, profile
+  const [selectedLanguage, setSelectedLanguage] = useState('hi')
   const [languages, setLanguages] = useState(DEFAULT_LANGUAGES)
-  const [selectedLanguage, setSelectedLanguage] = useState(DEFAULT_LANGUAGES[0].code)
-  const [languageLabel, setLanguageLabel] = useState(DEFAULT_LANGUAGES[0].label)
-  const [languagesLoading, setLanguagesLoading] = useState(false)
-  const [loading, setLoading] = useState(false)
+  
+  // Q&A State
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [qaResponses, setQaResponses] = useState([])
+  const [isProcessingAnswer, setIsProcessingAnswer] = useState(false)
+  const [textAnswer, setTextAnswer] = useState('')
+  
+  // Profile State
+  const [finalProfile, setFinalProfile] = useState(null)
+  const [isBuildingProfile, setIsBuildingProfile] = useState(false)
+  
+  // Error & Status
   const [error, setError] = useState('')
-  const [dragActive, setDragActive] = useState(false)
+  const [statusMessage, setStatusMessage] = useState('')
+
+  useEffect(() => {
+    if (darkMode) {
+      document.body.classList.add('dark-mode')
+    } else {
+      document.body.classList.remove('dark-mode')
+    }
+  }, [darkMode])
 
   useEffect(() => {
     const fetchLanguages = async () => {
       try {
-        setLanguagesLoading(true)
         const response = await fetch(`${API_BASE_URL}/languages`)
-        if (!response.ok) throw new Error('Failed to load language list')
-        const payload = await response.json()
-        const available = Array.isArray(payload.languages) ? payload.languages : []
-        if (available.length) {
-          setLanguages(available)
-          const defaultLang = available.find((lang) => lang.code === 'hi') || available[0]
-          setSelectedLanguage(defaultLang.code)
-          setLanguageLabel(defaultLang.label)
-        } else {
-          setLanguages(DEFAULT_LANGUAGES)
+        if (response.ok) {
+          const payload = await response.json()
+          const available = Array.isArray(payload.languages) ? payload.languages : []
+          if (available.length) {
+            setLanguages(available)
+          }
         }
       } catch (err) {
         console.error('Language load error:', err)
-        setLanguages(DEFAULT_LANGUAGES)
-      } finally {
-        setLanguagesLoading(false)
       }
     }
-
     fetchLanguages()
   }, [])
 
-  const handleDrag = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true)
-    } else if (e.type === "dragleave") {
-      setDragActive(false)
-    }
-  }
-
-  const handleDrop = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragActive(false)
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileSet(e.dataTransfer.files[0])
-    }
-  }
-
-  const handleFileSet = (selectedFile) => {
-    if (selectedFile && selectedFile.type.startsWith('audio/')) {
-      setFile(selectedFile)
-      setError('')
-      setTranscription('')
-      setOriginalText('')
-      setDetectedLanguage('')
-    } else {
-      setError('Please select a valid audio file')
-    }
-  }
-
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files?.[0]
-    if (selectedFile) {
-      handleFileSet(selectedFile)
-    }
-  }
-
-  const handleTranscribe = async () => {
-    if (!file) {
-      setError('Please select an audio file')
-      return
-    }
-
-    if (!selectedLanguage) {
-      setError('Please choose a source language')
-      return
-    }
-
-    setLoading(true)
+  const handleStartQA = () => {
+    setCurrentStep('qa')
+    setCurrentQuestionIndex(0)
+    setQaResponses([])
     setError('')
-    setTranscription('')
-    setOriginalText('')
-    setDetectedLanguage('')
-    setChunkCount(0)
+    setTextAnswer('')
+  }
+
+  const handleRecordingComplete = async (audioFile) => {
+    setIsProcessingAnswer(true)
+    setError('')
+    setStatusMessage('Transcribing your answer...')
 
     try {
+      // Step 1: Transcribe the audio
       const formData = new FormData()
-      formData.append('audio', file)
+      formData.append('audio', audioFile)
       formData.append('source_language', selectedLanguage)
 
-      const response = await fetch(`${API_BASE_URL}/transcribe`, {
+      const transcribeResponse = await fetch(`${API_BASE_URL}/transcribe`, {
         method: 'POST',
         body: formData
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
+      if (!transcribeResponse.ok) {
+        const errorData = await transcribeResponse.json()
+        throw new Error(errorData.detail || 'Transcription failed')
       }
 
-      const payload = await response.json()
-      const data = payload.data || {}
-      const originalText = data.original_text || ''
-      
-      setOriginalText(originalText)
-      setDetectedLanguage(data.language_label || data.detected_language || 'Unknown')
+      const transcribeData = await transcribeResponse.json()
+      const transcript = transcribeData.data?.original_text || ''
 
-      // Translate using MyMemory free API
-      if (originalText && selectedLanguage !== 'en') {
-        try {
-          const translated = await translateText(originalText, selectedLanguage, 'en')
-          setTranscription(translated)
-        } catch (translateErr) {
-          console.error('Translation error:', translateErr)
-          setError('Transcription succeeded but translation failed. Showing original text.')
-          setTranscription(originalText)
-        }
+      if (!transcript.trim()) {
+        throw new Error('No speech detected. Please try again.')
+      }
+
+      setStatusMessage('Extracting information...')
+
+      // Step 2: Extract structured data from the transcript
+      const currentQuestion = RESUME_QUESTIONS[currentQuestionIndex]
+      const llmResponse = await fetch(`${API_BASE_URL}/ask_llm`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          transcript: transcript,
+          question: currentQuestion.question,
+          field: currentQuestion.field
+        })
+      })
+
+      if (!llmResponse.ok) {
+        const errorData = await llmResponse.json()
+        throw new Error(errorData.detail || 'Failed to process answer')
+      }
+
+      const llmData = await llmResponse.json()
+      
+      // Store the Q&A response
+      const newResponse = {
+        question_id: currentQuestion.id,
+        field: currentQuestion.field,
+        question: currentQuestion.question,
+        transcript: transcript,
+        extracted_data: llmData.extracted_data || {}
+      }
+
+      const updatedResponses = [...qaResponses, newResponse]
+      setQaResponses(updatedResponses)
+
+      // Move to next question or finish
+      if (currentQuestionIndex < RESUME_QUESTIONS.length - 1) {
+        setCurrentQuestionIndex(currentQuestionIndex + 1)
+        setStatusMessage('')
+        setTextAnswer('')
       } else {
-        setTranscription(originalText)
+        // All questions answered, build profile
+        await buildFinalProfile(updatedResponses)
       }
-      
-      setChunkCount(1)
+
     } catch (err) {
-      setError(`${err.message}`)
-      console.error('Transcription error:', err)
+      console.error('Answer processing error:', err)
+      setError(err.message || 'Failed to process your answer. Please try again.')
     } finally {
-      setLoading(false)
+      setIsProcessingAnswer(false)
+      if (currentQuestionIndex < RESUME_QUESTIONS.length - 1) {
+        setStatusMessage('')
+      }
     }
   }
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(transcription)
-    const btn = document.querySelector('.copy-btn')
-    if (!btn) return
-    const originalText = btn.textContent
-    btn.textContent = '✓ Copied!'
-    setTimeout(() => {
-      btn.textContent = originalText
-    }, 2000)
+  const buildFinalProfile = async (responses) => {
+    setIsBuildingProfile(true)
+    setStatusMessage('Building your resume profile...')
+    setCurrentStep('profile')
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/build_profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ qa_responses: responses })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to build profile')
+      }
+
+      const data = await response.json()
+      setFinalProfile(data.profile)
+      setStatusMessage('Profile created successfully!')
+      
+    } catch (err) {
+      console.error('Profile building error:', err)
+      setError(err.message || 'Failed to build profile')
+    } finally {
+      setIsBuildingProfile(false)
+    }
   }
 
-  const handleLanguageChange = (e) => {
-    const code = e.target.value
-    setSelectedLanguage(code)
-    const meta = languages.find((lang) => lang.code === code)
-    setLanguageLabel(meta?.label || 'Selected')
+  const handleTextSubmit = async () => {
+    if (!textAnswer.trim()) {
+      setError('Please enter an answer or use voice recording')
+      return
+    }
+
+    setIsProcessingAnswer(true)
+    setError('')
+    setStatusMessage('Processing your answer...')
+
+    try {
+      const currentQuestion = RESUME_QUESTIONS[currentQuestionIndex]
+      const llmResponse = await fetch(`${API_BASE_URL}/ask_llm`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          transcript: textAnswer,
+          question: currentQuestion.question,
+          field: currentQuestion.field
+        })
+      })
+
+      if (!llmResponse.ok) {
+        const errorData = await llmResponse.json()
+        throw new Error(errorData.detail || 'Failed to process answer')
+      }
+
+      const llmData = await llmResponse.json()
+      
+      const newResponse = {
+        question_id: currentQuestion.id,
+        field: currentQuestion.field,
+        question: currentQuestion.question,
+        transcript: textAnswer,
+        extracted_data: llmData.data || {}
+      }
+
+      const updatedResponses = [...qaResponses, newResponse]
+      setQaResponses(updatedResponses)
+
+      if (currentQuestionIndex < RESUME_QUESTIONS.length - 1) {
+        setCurrentQuestionIndex(currentQuestionIndex + 1)
+        setStatusMessage('')
+        setTextAnswer('')
+      } else {
+        await buildFinalProfile(updatedResponses)
+      }
+
+    } catch (err) {
+      console.error('Text answer processing error:', err)
+      setError(err.message || 'Failed to process your answer. Please try again.')
+    } finally {
+      setIsProcessingAnswer(false)
+    }
   }
+
+  const handleSkipQuestion = () => {
+    const currentQuestion = RESUME_QUESTIONS[currentQuestionIndex]
+    const skippedResponse = {
+      question_id: currentQuestion.id,
+      field: currentQuestion.field,
+      question: currentQuestion.question,
+      transcript: '',
+      extracted_data: { value: null, skipped: true }
+    }
+
+    const updatedResponses = [...qaResponses, skippedResponse]
+    setQaResponses(updatedResponses)
+    setTextAnswer('')
+
+    if (currentQuestionIndex < RESUME_QUESTIONS.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1)
+    } else {
+      buildFinalProfile(updatedResponses)
+    }
+  }
+
+  const handleRestart = () => {
+    setCurrentStep('welcome')
+    setCurrentQuestionIndex(0)
+    setQaResponses([])
+    setFinalProfile(null)
+    setError('')
+    setStatusMessage('')
+  }
+
+  const downloadProfile = () => {
+    const blob = new Blob([JSON.stringify(finalProfile, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `resume_${finalProfile?.name?.replace(/\s+/g, '_') || 'profile'}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const currentQuestion = RESUME_QUESTIONS[currentQuestionIndex]
+  const progress = ((currentQuestionIndex + 1) / RESUME_QUESTIONS.length) * 100
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${darkMode ? 'dark' : ''}`}>
       <div className="background-animation">
         <div className="shape shape-1"></div>
         <div className="shape shape-2"></div>
         <div className="shape shape-3"></div>
       </div>
-      
+
+      <button 
+        className="dark-mode-toggle"
+        onClick={() => setDarkMode(!darkMode)}
+        aria-label="Toggle dark mode"
+      >
+        {darkMode ? '☀️' : '🌙'}
+      </button>
+
       <div className="content-wrapper">
-        <div className="header">
-          <div className="logo">
-            <span className="logo-icon">🎙️</span>
-            <h1>JobSathi</h1>
-          </div>
-          <p className="tagline">AI4Bharat Powered Transcription</p>
-          <div className="tech-badge">Manual language control • Chunked IndicTrans2 Translation</div>
-          <div className="feature-chip-row">
-            {FEATURE_CHIPS.map(({ icon, text }) => (
-              <span key={text} className="feature-chip">
-                {icon} {text}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="selector-row">
-            <div>
-              <p className="selector-heading">Source Language</p>
-              <p className="selector-subheading">Choose the language spoken in your audio</p>
+        {/* Welcome Screen */}
+        {currentStep === 'welcome' && (
+          <div className="welcome-screen">
+            <div className="logo-large">
+              <span className="logo-icon-large">🎙️</span>
+              <h1 className="title-large">JobSathi</h1>
             </div>
-            <select
-              className="language-select"
-              value={selectedLanguage}
-              onChange={handleLanguageChange}
-              disabled={languagesLoading}
-            >
-              {languagesLoading && (
-                <option value={selectedLanguage}>Loading…</option>
-              )}
-              {!languagesLoading && languages.length === 0 && (
-                <option value="">Unavailable</option>
-              )}
-              {languages.map(({ code, label }) => (
-                <option key={code} value={code}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
+            <p className="subtitle">Voice-Powered Resume Builder</p>
+            <p className="description">
+              Create your professional resume in {RESUME_QUESTIONS.length} simple voice responses.
+              Powered by AI4Bharat speech recognition and AI intelligence.
+            </p>
 
-          <div 
-            className={`upload-zone ${dragActive ? 'drag-active' : ''} ${file ? 'has-file' : ''}`}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-            onClick={() => document.getElementById('fileInput').click()}
-          >
-            <input
-              type="file"
-              accept="audio/*"
-              onChange={handleFileChange}
-              disabled={loading}
-              id="fileInput"
-              style={{ display: 'none' }}
-            />
-            
-            {!file ? (
-              <>
-                <div className="upload-icon">📁</div>
-                <p className="upload-text">Drop your audio file here</p>
-                <p className="upload-subtext">or click to browse</p>
-                <div className="supported-formats">
-                  <span>WAV</span>
-                  <span>MP3</span>
-                  <span>M4A</span>
-                  <span>FLAC</span>
+            <div className="language-selector-card">
+              <h3>Select Your Language</h3>
+              <p className="selector-hint">Choose the language you'll speak in</p>
+              <select
+                className="language-select-large"
+                value={selectedLanguage}
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+              >
+                {languages.map(({ code, label }) => (
+                  <option key={code} value={code}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button className="start-button" onClick={handleStartQA}>
+              <span className="btn-icon">🚀</span>
+              Start Building Resume
+            </button>
+
+            <div className="features-grid">
+              <div className="feature-item">
+                <span className="feature-icon">🎤</span>
+                <h4>Voice First</h4>
+                <p>Speak naturally in your language</p>
+              </div>
+              <div className="feature-item">
+                <span className="feature-icon">🧠</span>
+                <h4>AI Powered</h4>
+                <p>Smart extraction & formatting</p>
+              </div>
+              <div className="feature-item">
+                <span className="feature-icon">⚡</span>
+                <h4>Fast & Easy</h4>
+                <p>Complete in under 10 minutes</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Q&A Screen */}
+        {currentStep === 'qa' && (
+          <div className="qa-screen">
+            <div className="qa-header">
+              <h2 className="qa-title">Building Your Resume</h2>
+              <div className="progress-container">
+                <div className="progress-bar">
+                  <div className="progress-fill" style={{ width: `${progress}%` }}></div>
                 </div>
-                <p className="language-pill">Current language: {languageLabel}</p>
-              </>
-            ) : (
-              <>
-                <div className="file-icon">🎵</div>
-                <p className="file-name">{file.name}</p>
-                <p className="file-size">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                <p className="language-pill subtle">Source: {languageLabel}</p>
-              </>
-            )}
-          </div>
-
-          <button
-            onClick={handleTranscribe}
-            disabled={!file || loading}
-            className={`transcribe-btn ${loading ? 'loading' : ''}`}
-          >
-            {loading ? (
-              <>
-                <span className="spinner"></span>
-                Processing...
-              </>
-            ) : (
-              <>
-                <span className="btn-icon">⚡</span>
-                Transcribe Audio
-              </>
-            )}
-          </button>
-
-          {error && (
-            <div className="message error-message">
-              <span className="message-icon">❌</span>
-              {error}
+                <p className="progress-text">
+                  Question {currentQuestionIndex + 1} of {RESUME_QUESTIONS.length}
+                </p>
+              </div>
             </div>
-          )}
 
-          {transcription && (
-            <div className="result-container">
-              {originalText && detectedLanguage !== 'English' && (
+            <div className="question-card">
+              <div className="question-number">Q{currentQuestionIndex + 1}</div>
+              <h3 className="question-text">{currentQuestion.question}</h3>
+              <p className="question-prompt">{currentQuestion.prompt}</p>
+
+              {!isProcessingAnswer && !statusMessage && (
                 <>
-                  <div className="result-header">
-                    <h3>Original ({detectedLanguage})</h3>
+                  <div className="input-method-divider">
+                    <span>Record with voice</span>
                   </div>
-                  <div className="transcription-box original">
-                    {originalText}
+                  
+                  <AudioRecorder
+                    onRecordingComplete={handleRecordingComplete}
+                    disabled={isProcessingAnswer}
+                  />
+                  
+                  <div className="input-method-divider">
+                    <span>Or type your answer</span>
                   </div>
+                  
+                  <div className="text-input-container">
+                    <textarea
+                      className="text-answer-input"
+                      placeholder="Type your answer here..."
+                      value={textAnswer}
+                      onChange={(e) => setTextAnswer(e.target.value)}
+                      rows={4}
+                      disabled={isProcessingAnswer}
+                    />
+                    <button 
+                      className="submit-text-button"
+                      onClick={handleTextSubmit}
+                      disabled={isProcessingAnswer || !textAnswer.trim()}
+                    >
+                      <span className="btn-icon">📝</span>
+                      Submit Answer
+                    </button>
+                  </div>
+                  
+                  <button className="skip-button" onClick={handleSkipQuestion}>
+                    Skip Question
+                  </button>
                 </>
               )}
-              
-              <div className="result-header">
-                <h3>English Translation</h3>
-                {detectedLanguage && (
-                  <span className="duration-badge">{detectedLanguage}</span>
-                )}
-              </div>
-              <div className="transcription-box">
-                {transcription}
-              </div>
-              <div className="info-grid">
-                <div className="stat-card">
-                  <p className="stat-label">Chunks processed</p>
-                  <p className="stat-value">{chunkCount || 1}</p>
+
+              {(isProcessingAnswer || statusMessage) && (
+                <div className="processing-indicator">
+                  <div className="spinner-large"></div>
+                  <p>{statusMessage}</p>
                 </div>
-                <div className="stat-card">
-                  <p className="stat-label">Language</p>
-                  <p className="stat-value">{languageLabel}</p>
+              )}
+
+              {error && (
+                <div className="error-box">
+                  <span className="error-icon">⚠️</span>
+                  <p>{error}</p>
+                  <button className="retry-button" onClick={() => setError('')}>
+                    Try Again
+                  </button>
                 </div>
-                <div className="stat-card">
-                  <p className="stat-label">File size</p>
-                  <p className="stat-value">{((file?.size || 0) / 1024 / 1024).toFixed(2)} MB</p>
-                </div>
-              </div>
-              <button onClick={copyToClipboard} className="copy-btn">
-                <span className="btn-icon">📋</span>
-                Copy to Clipboard
+              )}
+            </div>
+
+            <div className="qa-navigation">
+              <button
+                className="nav-button secondary"
+                onClick={handleRestart}
+                disabled={isProcessingAnswer}
+              >
+                Start Over
               </button>
             </div>
-          )}
-
-          <div className="process-flow">
-            {PROCESS_STEPS.map((step, index) => (
-              <div key={step} className="process-step">
-                <span className="step-index">{index + 1}</span>
-                <p>{step}</p>
-              </div>
-            ))}
           </div>
-        </div>
+        )}
+
+        {/* Profile Display Screen */}
+        {currentStep === 'profile' && (
+          <div className="profile-screen">
+            <div className="profile-header">
+              <h2 className="profile-title">
+                {isBuildingProfile ? 'Creating Your Profile...' : 'Your Resume Profile'}
+              </h2>
+            </div>
+
+            {isBuildingProfile && (
+              <div className="processing-indicator">
+                <div className="spinner-large"></div>
+                <p>{statusMessage}</p>
+              </div>
+            )}
+
+            {finalProfile && !isBuildingProfile && (
+              <>
+                <div className="profile-card">
+                  <div className="profile-section">
+                    <h3 className="section-title">Personal Information</h3>
+                    <div className="info-grid">
+                      {finalProfile.name && (
+                        <div className="info-item">
+                          <span className="info-label">Name:</span>
+                          <span className="info-value">{finalProfile.name}</span>
+                        </div>
+                      )}
+                      {finalProfile.role && (
+                        <div className="info-item">
+                          <span className="info-label">Role:</span>
+                          <span className="info-value">{finalProfile.role}</span>
+                        </div>
+                      )}
+                      {finalProfile.email && (
+                        <div className="info-item">
+                          <span className="info-label">Email:</span>
+                          <span className="info-value">{finalProfile.email}</span>
+                        </div>
+                      )}
+                      {finalProfile.phone && (
+                        <div className="info-item">
+                          <span className="info-label">Phone:</span>
+                          <span className="info-value">{finalProfile.phone}</span>
+                        </div>
+                      )}
+                      {finalProfile.location && (
+                        <div className="info-item">
+                          <span className="info-label">Location:</span>
+                          <span className="info-value">{finalProfile.location}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {finalProfile.summary && (
+                    <div className="profile-section">
+                      <h3 className="section-title">Professional Summary</h3>
+                      <p className="section-content">{finalProfile.summary}</p>
+                    </div>
+                  )}
+
+                  {finalProfile.experience_details && (
+                    <div className="profile-section">
+                      <h3 className="section-title">Experience</h3>
+                      {finalProfile.experience_years && (
+                        <p className="experience-years">{finalProfile.experience_years} years</p>
+                      )}
+                      {Array.isArray(finalProfile.experience_details) ? (
+                        finalProfile.experience_details.map((exp, idx) => (
+                          <div key={idx} className="experience-item">
+                            <h4 className="exp-role">{exp.role || 'Role'}</h4>
+                            <p className="exp-company">{exp.company || 'Company'} • {exp.duration || 'Duration'}</p>
+                            <p className="exp-description">{exp.description || ''}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="section-content">{typeof finalProfile.experience_details === 'string' ? finalProfile.experience_details : JSON.stringify(finalProfile.experience_details)}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {finalProfile.skills && (
+                    <div className="profile-section">
+                      <h3 className="section-title">Skills</h3>
+                      <div className="tags-container">
+                        {(Array.isArray(finalProfile.skills) 
+                          ? finalProfile.skills 
+                          : finalProfile.skills.split(',').map(s => s.trim())
+                        ).map((skill, idx) => (
+                          <span key={idx} className="tag">{skill}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {finalProfile.education && (
+                    <div className="profile-section">
+                      <h3 className="section-title">Education</h3>
+                      {Array.isArray(finalProfile.education) ? (
+                        finalProfile.education.map((edu, idx) => (
+                          <div key={idx} className="education-item">
+                            <h4 className="edu-degree">{edu.degree || 'Degree'}</h4>
+                            <p className="edu-institution">{edu.institution || 'Institution'} • {edu.year || 'Year'}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="section-content">{typeof finalProfile.education === 'string' ? finalProfile.education : JSON.stringify(finalProfile.education)}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {finalProfile.certifications && (
+                    <div className="profile-section">
+                      <h3 className="section-title">Certifications</h3>
+                      {Array.isArray(finalProfile.certifications) ? (
+                        <ul className="cert-list">
+                          {finalProfile.certifications.map((cert, idx) => (
+                            <li key={idx}>{cert}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="section-content">{typeof finalProfile.certifications === 'string' ? finalProfile.certifications : JSON.stringify(finalProfile.certifications)}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {finalProfile.projects && (
+                    <div className="profile-section">
+                      <h3 className="section-title">Notable Projects</h3>
+                      <p className="section-content">{finalProfile.projects}</p>
+                    </div>
+                  )}
+
+                  {finalProfile.languages && (
+                    <div className="profile-section">
+                      <h3 className="section-title">Languages</h3>
+                      {Array.isArray(finalProfile.languages) ? (
+                        <div className="tags-container">
+                          {finalProfile.languages.map((lang, idx) => (
+                            <span key={idx} className="tag">{lang}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="section-content">{typeof finalProfile.languages === 'string' ? finalProfile.languages : JSON.stringify(finalProfile.languages)}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {finalProfile.links && (
+                    <div className="profile-section">
+                      <h3 className="section-title">Professional Links</h3>
+                      {typeof finalProfile.links === 'object' && !Array.isArray(finalProfile.links) ? (
+                        <div className="links-container">
+                          {Object.entries(finalProfile.links).map(([key, value]) => (
+                            <div key={key} className="link-item">
+                              <span className="link-label">{key}:</span>
+                              <a href={value.startsWith('http') ? value : `https://${value}`} target="_blank" rel="noopener noreferrer" className="link-value">{value}</a>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="section-content">{typeof finalProfile.links === 'string' ? finalProfile.links : JSON.stringify(finalProfile.links)}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {finalProfile.extras && (
+                    <div className="profile-section">
+                      <h3 className="section-title">Additional Information</h3>
+                      {typeof finalProfile.extras === 'object' && !Array.isArray(finalProfile.extras) ? (
+                        <div className="extras-container">
+                          {Object.entries(finalProfile.extras).map(([key, value]) => (
+                            <div key={key} className="extra-item">
+                              <span className="extra-label">{key}:</span>
+                              <span className="extra-value">{typeof value === 'string' ? value : JSON.stringify(value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="section-content">{typeof finalProfile.extras === 'string' ? finalProfile.extras : JSON.stringify(finalProfile.extras)}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="profile-actions">
+                  <button className="action-button primary" onClick={downloadProfile}>
+                    <span className="btn-icon">💾</span>
+                    Download JSON
+                  </button>
+                  <button className="action-button secondary" onClick={handleRestart}>
+                    <span className="btn-icon">🔄</span>
+                    Create Another
+                  </button>
+                </div>
+              </>
+            )}
+
+            {error && !isBuildingProfile && (
+              <div className="error-box">
+                <span className="error-icon">⚠️</span>
+                <p>{error}</p>
+                <button className="retry-button" onClick={handleRestart}>
+                  Start Over
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         <footer className="footer">
-          <p>Powered by AI4Bharat IndicWhisper & IndicTrans2 • Built with ❤️</p>
+          <p>Powered by AI4Bharat & OpenRouter AI • Built with ❤️ for Job Seekers</p>
         </footer>
       </div>
     </div>
