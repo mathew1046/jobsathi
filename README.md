@@ -23,6 +23,16 @@ JobSathi is an intelligent voice-driven resume builder that supports **17+ India
 - LLM-powered data extraction (no fake data generation)
 - Direct PDF download with one click
 
+### 🛡️ Security & DevSecOps
+JobSathi integrates **GitLab DevSecOps** for automated security and compliance:
+- **Secret Detection** - Prevents API keys from being committed
+- **SAST** - Static code analysis for security vulnerabilities
+- **Dependency Scanning** - Monitors for vulnerable packages
+- **Container Scanning** - Scans Docker images before deployment
+- **License Compliance** - Tracks open-source licenses
+
+📖 **See [GITLAB_SETUP.md](GITLAB_SETUP.md) for 5-minute setup guide**
+
 ## 🗣️ Supported Languages
 
 Assamese, Awadhi, Bengali, Bhojpuri, Bodo, Dogri, English, Goan Konkani, Gujarati, Hindi, Kannada, Kashmiri, Maithili, Malayalam, Marathi, Manipuri, Nepali, Odia, Punjabi, Sanskrit, Santali, Sindhi, Telugu, Tamil, Urdu
