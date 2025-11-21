@@ -25,9 +25,9 @@ export const RESUME_QUESTIONS = [
   },
   {
     id: 5,
-    question: "What are your key technical skills?",
+    question: "What are your key skills?",
     field: "skills",
-    prompt: "List your technical skills, programming languages, tools, and technologies you're proficient in."
+    prompt: "List your skills, tools, and technologies you're proficient in."
   },
   {
     id: 6,
@@ -73,20 +73,20 @@ export const RESUME_QUESTIONS = [
   },
   {
     id: 13,
-    question: "Do you have any portfolio links, GitHub profile, or LinkedIn?",
-    field: "links",
-    prompt: "Share any relevant professional links - portfolio, GitHub, LinkedIn, personal website, etc."
+    question: "Are you willing to work full-time, part-time, or on a contract basis?",
+    field: "work_type_preference",
+    prompt: "Share your preference for work type - full-time, part-time, or contract."
   },
   {
     id: 14,
-    question: "Are there any notable projects you'd like to highlight?",
-    field: "projects",
-    prompt: "Tell me about significant projects you've worked on and your contributions."
+    question: "Do you know how to operate any machines or vehicles?",
+    field: "machines_operated",
+    prompt: "Tell me if you can operate any machines or vehicles. For example: scooter, car, truck, sewing machine, oven, forklifts, cutting machine, etc."
   },
   {
     id: 15,
-    question: "Do you have any awards, publications, or other achievements?",
-    field: "extras",
-    prompt: "Share any additional achievements, awards, publications, or recognitions."
+    question: "Do you have any referrals?",
+    field: "referrals",
+    prompt: "Share any referrals or references you have."
   }
 ]

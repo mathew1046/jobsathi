@@ -22,6 +22,11 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
+from job_search import search_jobs
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = FastAPI(title="JobSathi API - Resume Builder", version="6.0.0")
 
@@ -35,16 +40,20 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# Device and model IDs
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-ASR_MODEL_ID = "ai4bharat/indic-conformer-600m-multilingual"
+# Load configuration from environment
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    raise ValueError("GEMINI_API_KEY not found in environment variables")
+
+ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "ai4bharat/indic-conformer-600m-multilingual")
+DEVICE_CONFIG = os.getenv("DEVICE", "auto")
+DEVICE = "cuda" if DEVICE_CONFIG == "auto" and torch.cuda.is_available() else "cpu"
 
 # Database directory for storing responses
 DATABASE_DIR = os.path.join(os.path.dirname(__file__), "database")
 os.makedirs(DATABASE_DIR, exist_ok=True)
 
-# Gemini LLM configuration
-GEMINI_API_KEY = "AIzaSyDXNy1EXRlMnUYmoJYesy94SiDSc_rEYw8"
+# Configure Gemini
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Configuration for Gemini
@@ -59,7 +68,7 @@ GENERATION_CONFIG = {
 # Initialize the model
 # Using gemini-1.5-flash as it is fast and cost-effective
 model = genai.GenerativeModel(
-    model_name="gemini-2.0-flash-lite",
+    model_name="gemini-2.5-flash-lite",
     generation_config=GENERATION_CONFIG,
 )
 
@@ -201,7 +210,183 @@ async def transcribe(audio: UploadFile = File(...), source_language: str = Form(
 # LLM Integration
 # -----------------------
 
-async def call_gemini(prompt: str, system_message: str = "You are a helpful assistant that extracts structured data from text.") -> Dict[str, Any]:
+def validate_and_clean_data(data: Dict[str, Any], user_text: str = "") -> Dict[str, Any]:
+    """
+    Validate and clean data to remove common fake/dummy patterns.
+    Also validates against actual user responses to ensure data authenticity.
+    Returns cleaned data with fake values replaced by null.
+    """
+    # Common fake patterns
+    FAKE_PATTERNS = {
+        "email": [
+            "example.com", "@example", "john@", "user@", "test@",
+            "sample@", "demo@", "placeholder@", "dummy@"
+        ],
+        "phone": [
+            "123-456-7890", "1234567890", "555-", "000-", "111-",
+            "+91-1234567890", "+1-123-456-7890"
+        ],
+        "company": [
+            "abc corporation", "xyz company", "example corp", "test company",
+            "sample ltd", "demo inc", "placeholder", "unknown company"
+        ],
+        "school": [
+            "university of xyz", "abc university", "example university",
+            "test school", "sample college", "xyz institute"
+        ],
+        "generic": [
+            "example", "sample", "test", "demo", "placeholder", "dummy",
+            "lorem ipsum", "n/a", "not applicable", "tbd", "to be determined"
+        ]
+    }
+    
+    def clean_value(value, field_type="generic"):
+        """Clean a single value and verify it appears in user text."""
+        if not value:
+            return None
+        
+        if isinstance(value, str):
+            value_lower = value.lower().strip()
+            
+            # Check against patterns
+            patterns = FAKE_PATTERNS.get(field_type, []) + FAKE_PATTERNS["generic"]
+            for pattern in patterns:
+                if pattern in value_lower:
+                    print(f"⚠️ Detected fake pattern '{pattern}' in value '{value}' - removing")
+                    return None
+            
+            # Check for very short or suspicious values
+            if len(value_lower) < 2 and field_type not in ["name"]:
+                return None
+            
+            # If user_text provided, verify the value appears in it (for important fields)
+            if user_text and field_type in ["name", "email", "phone", "company", "school"]:
+                # Allow partial matches for names and companies
+                value_words = value_lower.split()
+                found = any(word in user_text.lower() for word in value_words if len(word) > 2)
+                if not found and len(value) > 3:
+                    print(f"⚠️ Value '{value}' not found in user responses - removing")
+                    return None
+                
+            return value
+        
+        return value
+    
+    # Clean top-level fields
+    cleaned = {}
+    
+    # Name
+    cleaned["name"] = clean_value(data.get("name"), "name")
+    
+    # Email
+    email = data.get("email")
+    cleaned["email"] = clean_value(email, "email")
+    
+    # Phone
+    phone = data.get("phone")
+    cleaned["phone"] = clean_value(phone, "phone")
+    
+    # Role
+    cleaned["role"] = clean_value(data.get("role"))
+    
+    # Location
+    cleaned["location"] = clean_value(data.get("location"))
+    
+    # Links
+    links = data.get("links", {})
+    if isinstance(links, dict):
+        cleaned_links = {}
+        for k, v in links.items():
+            cleaned_v = clean_value(v)
+            if cleaned_v:
+                cleaned_links[k] = cleaned_v
+        cleaned["links"] = cleaned_links if cleaned_links else {}
+    else:
+        cleaned["links"] = {}
+    
+    # Summary
+    cleaned["summary"] = clean_value(data.get("summary"))
+    
+    # Experience years
+    cleaned["experience_years"] = data.get("experience_years")
+    
+    # Experience details
+    exp_details = data.get("experience_details", [])
+    if isinstance(exp_details, list):
+        cleaned_exp = []
+        for exp in exp_details:
+            if isinstance(exp, dict):
+                cleaned_entry = {
+                    "company": clean_value(exp.get("company"), "company"),
+                    "role": clean_value(exp.get("role")),
+                    "duration": clean_value(exp.get("duration")),
+                    "description": clean_value(exp.get("description"))
+                }
+                # Only include if at least company or role is valid
+                if cleaned_entry["company"] or cleaned_entry["role"]:
+                    cleaned_exp.append(cleaned_entry)
+        cleaned["experience_details"] = cleaned_exp
+    else:
+        cleaned["experience_details"] = []
+    
+    # Skills
+    skills = data.get("skills", [])
+    if isinstance(skills, list):
+        cleaned_skills = [clean_value(s) for s in skills if clean_value(s)]
+        cleaned["skills"] = cleaned_skills
+    else:
+        cleaned["skills"] = []
+    
+    # Education
+    education = data.get("education", [])
+    if isinstance(education, list):
+        cleaned_edu = []
+        for edu in education:
+            if isinstance(edu, dict):
+                cleaned_entry = {
+                    "institution": clean_value(edu.get("institution"), "school"),
+                    "degree": clean_value(edu.get("degree")),
+                    "year": clean_value(edu.get("year"))
+                }
+                # Only include if at least institution or degree is valid
+                if cleaned_entry["institution"] or cleaned_entry["degree"]:
+                    cleaned_edu.append(cleaned_entry)
+        cleaned["education"] = cleaned_edu
+    else:
+        cleaned["education"] = []
+    
+    # Certifications
+    certs = data.get("certifications", [])
+    if isinstance(certs, list):
+        cleaned_certs = [clean_value(c) for c in certs if clean_value(c)]
+        cleaned["certifications"] = cleaned_certs
+    else:
+        cleaned["certifications"] = []
+    
+    # Languages
+    langs = data.get("languages", [])
+    if isinstance(langs, list):
+        cleaned_langs = [clean_value(l) for l in langs if clean_value(l)]
+        cleaned["languages"] = cleaned_langs
+    else:
+        cleaned["languages"] = []
+    
+    # Extras
+    extras = data.get("extras", {})
+    if isinstance(extras, dict):
+        cleaned_extras = {}
+        for k, v in extras.items():
+            cleaned_v = clean_value(v)
+            if cleaned_v:
+                cleaned_extras[k] = cleaned_v
+        cleaned["extras"] = cleaned_extras if cleaned_extras else {}
+    else:
+        cleaned["extras"] = {}
+    
+    return cleaned
+
+
+async def call_gemini(prompt: str, system_message: str = "You are a strict data extraction tool. Extract ONLY what is explicitly stated. NEVER fabricate, invent, or assume information.") -> Dict[str, Any]:
     """Call Gemini API with given prompt and return JSON response."""
     try:
         # Combine system message and prompt as Gemini 1.5 Flash handles context well
@@ -267,20 +452,33 @@ async def ask_llm(payload: Dict[str, Any] = Body(...)):
     prompt = f"""Question: {question}
 User's answer (in English or other language): {transcript}
 
-Task 1: Translate the user's answer to English if it is not already in English.
-Task 2: Extract the requested resume field from the text.
+⚠️ CRITICAL RULES - VIOLATING THESE IS STRICTLY FORBIDDEN:
+1. Translate the user's answer to English EXACTLY as spoken - word for word.
+2. Extract ONLY the EXACT information the user explicitly stated.
+3. NEVER EVER add ANY information that was not directly mentioned by the user.
+4. NEVER make assumptions or guesses about missing information.
+5. NEVER create placeholder, example, or dummy data.
+6. If the user did not provide information for this field, return null or empty string.
+7. If the answer is unclear or vague, use null - DO NOT interpret or guess.
 
-Return a JSON object with TWO keys:
-1. 'translation': The English translation of the user's answer.
-2. 'extracted_data': A small JSON object with the key '{field}' containing the extracted value.
+You are a DATA EXTRACTION TOOL, not a creative assistant. Your ONLY job is to copy what was said.
 
-Example format:
-{{
-  "translation": "My name is Ramesh Kumar.",
-  "extracted_data": {{ "name": "Ramesh Kumar" }}
-}}
+Return a JSON object with exactly TWO keys:
+1. 'translation': The EXACT English translation - word-for-word, no additions.
+2. 'extracted_data': A JSON object with the key '{field}' containing ONLY what the user explicitly said.
 
-Return ONLY the JSON, no explanations."""
+CORRECT Examples:
+- User: "My name is John" → {{"translation": "My name is John", "extracted_data": {{"name": "John"}}}}
+- User: "I have 5 years experience" → {{"translation": "I have 5 years experience", "extracted_data": {{"experience_years": 5}}}}
+- User: "some experience" → {{"translation": "some experience", "extracted_data": {{"experience_years": null}}}}
+- User: "I don't know" → {{"translation": "I don't know", "extracted_data": {{"{field}": null}}}}
+
+WRONG Examples (NEVER DO THIS):
+- User says nothing about email → DO NOT return "example@email.com"
+- User says "I'm a driver" → DO NOT add "with 5 years experience" or any other details
+- User gives minimal info → DO NOT expand or embellish
+
+Return ONLY valid JSON. No explanations, no markdown, no extra text."""
     
     result = await call_gemini(prompt)
     
@@ -463,56 +661,90 @@ async def build_profile(payload: Dict[str, Any] = Body(...)):
     if not responses:
         raise HTTPException(status_code=400, detail="No responses found in session")
     
-    # Merge all Q&A responses
-    merged_data = {}
+    # Build English text from all translated responses
+    english_responses = []
     for item in responses:
-        if "llm_output" in item and isinstance(item["llm_output"], dict):
-            merged_data.update(item["llm_output"])
+        question = item.get("question", "")
+        translated_text = item.get("translated_text", "")
+        if translated_text:
+            english_responses.append(f"Q: {question}\nA: {translated_text}")
+    
+    # Join all responses into a single English text
+    full_english_text = "\n\n".join(english_responses)
     
     # Create ATS-optimized resume using LLM
-    prompt = f"""Here is raw resume data collected from a user interview:
-{json.dumps(merged_data, indent=2)}
+    prompt = f"""Here is a complete interview transcript in English from a job seeker:
 
-Please create an ATS-optimized professional resume in JSON format. Make it comprehensive and well-structured for Applicant Tracking Systems.
+{full_english_text}
 
-Return a JSON with these fields:
-- name (string): Full name
-- role (string): Professional title/desired position
-- email (string): Email address
-- phone (string): Phone number
-- location (string): City, State/Country
-- links (object): {{"linkedin": "url", "github": "url", "portfolio": "url"}}
-- summary (string): Professional summary (3-4 sentences highlighting key achievements and skills)
-- experience_years (number): Total years of experience
-- experience_details (array): [{{
-    "company": "Company Name",
-    "role": "Job Title",
-    "duration": "Month Year - Month Year",
-    "description": "Key achievements and responsibilities"
-  }}]
-- skills (array): Technical and professional skills
-- education (array): [{{
-    "degree": "Degree Name",
-    "institution": "University Name",
-    "year": "Year"
-  }}]
-- certifications (array): List of certifications
-- languages (array): Languages spoken
-- extras (object): Any additional relevant information
+YOUR TASK: Extract information from this English text and create a structured JSON resume.
 
-Use proper formatting, action verbs, and quantifiable achievements where possible. Return ONLY valid JSON."""
+🚫 FORBIDDEN ACTIONS (If you do any of these, you FAILED):
+- Adding ANY information not mentioned in the transcript above
+- Creating example emails like "john@example.com" 
+- Creating example phone numbers like "123-456-7890"
+- Adding example companies like "ABC Corporation"
+- Adding example schools like "University of XYZ"
+- Creating job descriptions if user didn't provide them
+- Adding skills the user didn't mention
+- Inventing dates, durations, or years
+- Writing professional summaries with information user didn't give
+- Assuming ANYTHING
+
+✅ ALLOWED ACTIONS:
+- Copy EXACT values from the raw data
+- Organize the data into proper structure
+- Use null for missing fields
+- Use [] for empty arrays
+- Use {{}} for empty objects
+
+EXAMPLE OF CORRECT BEHAVIOR:
+If raw data has: {{"name": "John", "role": "driver"}}
+Then output should have ONLY: {{"name": "John", "role": "driver", ...all other fields null/empty}}
+
+If raw data has: {{"name": "John"}} (no role mentioned)
+Then output: {{"name": "John", "role": null, ...}}
+
+Return JSON with these fields (ONLY use data from above, use null/[]/{{}} for missing):
+{{
+  "name": null,
+  "role": null,
+  "email": null,
+  "phone": null,
+  "location": null,
+  "links": {{}},
+  "summary": null,
+  "experience_years": null,
+  "experience_details": [],
+  "skills": [],
+  "education": [],
+  "certifications": [],
+  "languages": [],
+  "extras": {{}}
+}}
+
+Fill ONLY the fields where you have ACTUAL data from the raw data above. Everything else stays null/[]/{{}}."""
     
-    result = await call_gemini(prompt, system_message="You are an expert ATS resume writer. Create professional, keyword-rich resumes optimized for Applicant Tracking Systems.")
+    result = await call_gemini(prompt, system_message="You are a JSON converter. Your ONLY job is to copy data from input to output structure. You MUST NOT generate, create, or invent ANY data. If a field has no data, output null or []. Outputting fake data is a critical error.")
+
+    # ⚠️ CRITICAL: Validate and clean result to remove fake patterns
+    print("🔍 Validating data for fake patterns...")
+    
+    # Build a validation text from all English responses for cross-checking
+    validation_text = " ".join([item.get("translated_text", "").lower() for item in responses])
+    
+    cleaned_result = validate_and_clean_data(result, validation_text)
+    print("✅ Data validation complete")
     
     # Mark session as completed
     session_data["metadata"]["completed"] = True
     session_data["metadata"]["completed_at"] = datetime.now().isoformat()
-    session_data["profile"] = result
+    session_data["profile"] = cleaned_result
     
     # Save session data and generate PDF
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        name = result.get("name", "unknown").replace(" ", "_").replace("/", "_")
+        name = cleaned_result.get("name", "unknown").replace(" ", "_").replace("/", "_")
         
         # Save complete session JSON
         json_filename = os.path.join(DATABASE_DIR, f"session_{timestamp}_{name}.json")
@@ -522,7 +754,7 @@ Use proper formatting, action verbs, and quantifiable achievements where possibl
         
         # Generate PDF resume
         pdf_filename = os.path.join(DATABASE_DIR, f"resume_{timestamp}_{name}.pdf")
-        generate_ats_resume_pdf(result, pdf_filename)
+        generate_ats_resume_pdf(cleaned_result, pdf_filename)
         print(f"Generated PDF resume: {pdf_filename}")
         
         # Clean up session from memory
@@ -535,7 +767,7 @@ Use proper formatting, action verbs, and quantifiable achievements where possibl
     
     return {
         "status": "success",
-        "profile": result,
+        "profile": cleaned_result,
         "pdf_filename": f"resume_{timestamp}_{name}.pdf"
     }
 
@@ -546,6 +778,31 @@ async def download_resume(filename: str):
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Resume not found")
     return FileResponse(filepath, media_type='application/pdf', filename=filename)
+
+@app.post("/search_jobs")
+async def search_jobs_endpoint(payload: Dict[str, Any] = Body(...)):
+    """
+    Search for relevant jobs based on user profile.
+    Payload: { "profile": {...} }
+    Returns: { "status": "success", "jobs": [...], "count": 25 }
+    """
+    profile = payload.get("profile")
+    
+    if not profile:
+        raise HTTPException(status_code=400, detail="Profile data is required")
+    
+    try:
+        # Search jobs using the job_search module
+        jobs = search_jobs(profile, min_score=3)
+        
+        return {
+            "status": "success",
+            "jobs": jobs,
+            "count": len(jobs)
+        }
+    except Exception as e:
+        print(f"Job search error: {e}")
+        raise HTTPException(status_code=500, detail=f"Job search failed: {str(e)}")
 
 @app.post("/build_profile_legacy")
 async def build_profile(payload: Dict[str, Any] = Body(...)):

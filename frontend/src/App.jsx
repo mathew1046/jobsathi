@@ -37,6 +37,11 @@ function App() {
   const [finalProfile, setFinalProfile] = useState(null)
   const [isBuildingProfile, setIsBuildingProfile] = useState(false)
 
+  // Job Search State
+  const [jobs, setJobs] = useState([])
+  const [isSearchingJobs, setIsSearchingJobs] = useState(false)
+  const [showJobs, setShowJobs] = useState(false)
+
   // Error & Status
   const [error, setError] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
@@ -213,6 +218,43 @@ function App() {
       setError(err.message || 'Failed to build profile')
     } finally {
       setIsBuildingProfile(false)
+    }
+  }
+
+  const handleSearchJobs = async () => {
+    if (!finalProfile) {
+      setError('Profile not available for job search')
+      return
+    }
+
+    setIsSearchingJobs(true)
+    setError('')
+    setStatusMessage('Searching for relevant jobs...')
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/search_jobs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ profile: finalProfile })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Job search failed')
+      }
+
+      const data = await response.json()
+      setJobs(data.jobs || [])
+      setShowJobs(true)
+      setStatusMessage(`Found ${data.count} relevant jobs!`)
+
+    } catch (err) {
+      console.error('Job search error:', err)
+      setError(err.message || 'Failed to search jobs')
+    } finally {
+      setIsSearchingJobs(false)
     }
   }
 
@@ -646,10 +688,12 @@ function App() {
                       {typeof finalProfile.links === 'object' && !Array.isArray(finalProfile.links) ? (
                         <div className="links-container">
                           {Object.entries(finalProfile.links).map(([key, value]) => (
-                            <div key={key} className="link-item">
-                              <span className="link-label">{key}:</span>
-                              <a href={value.startsWith('http') ? value : `https://${value}`} target="_blank" rel="noopener noreferrer" className="link-value">{value}</a>
-                            </div>
+                            value && (
+                              <div key={key} className="link-item">
+                                <span className="link-label">{key}:</span>
+                                <a href={value.startsWith('http') ? value : `https://${value}`} target="_blank" rel="noopener noreferrer" className="link-value">{value}</a>
+                              </div>
+                            )
                           ))}
                         </div>
                       ) : (
@@ -686,7 +730,79 @@ function App() {
                     <span className="btn-icon">🔄</span>
                     Create Another
                   </button>
+                  <button
+                    className="action-button secondary"
+                    onClick={handleSearchJobs}
+                    disabled={isSearchingJobs}
+                  >
+                    {isSearchingJobs ? 'Searching Jobs...' : '🔍 Find Relevant Jobs'}
+                  </button>
                 </div>
+
+                {/* Job Listings Section */}
+                {showJobs && (
+                  <div className="jobs-section">
+                    <h3 className="section-title">
+                      Relevant Job Openings ({jobs.length})
+                    </h3>
+                    {isSearchingJobs && (
+                      <div className="processing-indicator">
+                        <div className="spinner"></div>
+                        <p>{statusMessage}</p>
+                      </div>
+                    )}
+                    {!isSearchingJobs && jobs.length === 0 && (
+                      <p className="no-jobs">No jobs found matching your profile. Try updating your resume or check back later.</p>
+                    )}
+                    {!isSearchingJobs && jobs.length > 0 && (
+                      <div className="jobs-grid">
+                        {jobs.map((job, index) => (
+                          <div key={index} className="job-card">
+                            <div className="job-header">
+                              <h4 className="job-title">{job.title}</h4>
+                              <span className="job-source">{job.source}</span>
+                            </div>
+                            <div className="job-info">
+                              <p className="job-company">
+                                <span className="job-icon">🏢</span>
+                                {job.company}
+                              </p>
+                              <p className="job-location">
+                                <span className="job-icon">📍</span>
+                                {job.location}
+                              </p>
+                              {job.salary && job.salary !== 'Not specified' && (
+                                <p className="job-salary">
+                                  <span className="job-icon">💰</span>
+                                  {job.salary}
+                                </p>
+                              )}
+                              {job.relevance_score && (
+                                <p className="job-relevance">
+                                  <span className="job-icon">⭐</span>
+                                  Match: {job.relevance_score}/30
+                                </p>
+                              )}
+                            </div>
+                            {job.description && (
+                              <p className="job-description">{job.description}</p>
+                            )}
+                            {job.url && (
+                              <a
+                                href={job.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="apply-button"
+                              >
+                                Apply Now →
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
 
