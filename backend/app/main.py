@@ -3,6 +3,7 @@
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 import tempfile
 import os
 import asyncio
@@ -10,8 +11,17 @@ import torch
 import torchaudio
 from transformers import AutoModel
 import httpx
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import json
+import google.generativeai as genai
+from datetime import datetime
+import uuid
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
 app = FastAPI(title="JobSathi API - Resume Builder", version="6.0.0")
 
@@ -29,16 +39,38 @@ app.add_middleware(
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 ASR_MODEL_ID = "ai4bharat/indic-conformer-600m-multilingual"
 
-# OpenRouter LLM configuration
-OPENROUTER_API_KEY = "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"
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-LLM_MODEL = "deepseek/deepseek-chat-v3.1:free"
+# Database directory for storing responses
+DATABASE_DIR = os.path.join(os.path.dirname(__file__), "database")
+os.makedirs(DATABASE_DIR, exist_ok=True)
+
+# Gemini LLM configuration
+GEMINI_API_KEY = "AIzaSyDXNy1EXRlMnUYmoJYesy94SiDSc_rEYw8"
+genai.configure(api_key=GEMINI_API_KEY)
+
+# Configuration for Gemini
+GENERATION_CONFIG = {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 64,
+    "max_output_tokens": 8192,
+    "response_mime_type": "application/json",
+}
+
+# Initialize the model
+# Using gemini-1.5-flash as it is fast and cost-effective
+model = genai.GenerativeModel(
+    model_name="gemini-2.0-flash-lite",
+    generation_config=GENERATION_CONFIG,
+)
 
 # -----------------------
 # Globals and locks
 # -----------------------
 _asr_model = None
 asr_lock = asyncio.Lock()
+
+# Session storage: {session_id: {"responses": [], "metadata": {}}}
+session_storage = {}
 
 # Language maps
 LANGUAGE_NAME = {
@@ -169,75 +201,353 @@ async def transcribe(audio: UploadFile = File(...), source_language: str = Form(
 # LLM Integration
 # -----------------------
 
-async def call_openrouter(prompt: str, system_message: str = "You are a helpful assistant that extracts structured data from text.") -> Dict[str, Any]:
-    """Call OpenRouter API with given prompt and return JSON response."""
+async def call_gemini(prompt: str, system_message: str = "You are a helpful assistant that extracts structured data from text.") -> Dict[str, Any]:
+    """Call Gemini API with given prompt and return JSON response."""
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                OPENROUTER_URL,
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": LLM_MODEL,
-                    "messages": [
-                        {"role": "system", "content": system_message},
-                        {"role": "user", "content": prompt}
-                    ]
-                }
-            )
-            response.raise_for_status()
-            data = response.json()
-            content = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+        # Combine system message and prompt as Gemini 1.5 Flash handles context well
+        full_prompt = f"System: {system_message}\n\nUser: {prompt}"
+        
+        # Generate content asynchronously
+        response = await model.generate_content_async(full_prompt)
+        content = response.text
+        
+        # Try to parse JSON from response
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            # If response contains markdown code blocks, extract JSON
+            if "```json" in content:
+                json_str = content.split("```json")[1].split("```")[0].strip()
+                return json.loads(json_str)
+            elif "```" in content:
+                json_str = content.split("```")[1].split("```")[0].strip()
+                return json.loads(json_str)
+            return {"raw_response": content}
             
-            # Try to parse JSON from response
-            try:
-                return json.loads(content)
-            except json.JSONDecodeError:
-                # If response contains markdown code blocks, extract JSON
-                if "```json" in content:
-                    json_str = content.split("```json")[1].split("```")[0].strip()
-                    return json.loads(json_str)
-                elif "```" in content:
-                    json_str = content.split("```")[1].split("```")[0].strip()
-                    return json.loads(json_str)
-                return {"raw_response": content}
     except Exception as e:
-        print(f"OpenRouter API error: {e}")
+        print(f"Gemini API error: {e}")
+        # Fallback or detailed error logging
+        if hasattr(e, 'response'):
+             print(f"Gemini feedback: {e.response.prompt_feedback}")
         raise HTTPException(status_code=500, detail=f"LLM API failed: {str(e)}")
+
+@app.post("/start_session")
+async def start_session():
+    """Create a new session for the user."""
+    session_id = str(uuid.uuid4())
+    session_storage[session_id] = {
+        "responses": [],
+        "metadata": {
+            "created_at": datetime.now().isoformat(),
+            "completed": False
+        }
+    }
+    print(f"Created session: {session_id}")
+    return {"status": "success", "session_id": session_id}
 
 @app.post("/ask_llm")
 async def ask_llm(payload: Dict[str, Any] = Body(...)):
     """
     Accepts transcript and question, sends to LLM, returns structured JSON.
-    Payload: { "transcript": "...", "question": "...", "field": "..." }
+    Stores response in session.
+    Payload: { "session_id": "...", "transcript": "...", "question": "...", "field": "...", "question_id": 1 }
     """
+    session_id = payload.get("session_id")
     transcript = payload.get("transcript", "")
     question = payload.get("question", "")
     field = payload.get("field", "answer")
+    question_id = payload.get("question_id", 0)
+    
+    if not session_id or session_id not in session_storage:
+        raise HTTPException(status_code=400, detail="Invalid or missing session_id")
     
     if not transcript:
         raise HTTPException(status_code=400, detail="Transcript is required")
     
     prompt = f"""Question: {question}
-User's answer (in English): {transcript}
+User's answer (in English or other language): {transcript}
 
-Extract the requested resume field from this text and return ONLY a small JSON object.
-The JSON should have the key '{field}' with the extracted value.
-If multiple values exist, use an array. Keep response concise.
+Task 1: Translate the user's answer to English if it is not already in English.
+Task 2: Extract the requested resume field from the text.
 
-Example format: {{"name": "Ramesh Kumar"}}
+Return a JSON object with TWO keys:
+1. 'translation': The English translation of the user's answer.
+2. 'extracted_data': A small JSON object with the key '{field}' containing the extracted value.
+
+Example format:
+{{
+  "translation": "My name is Ramesh Kumar.",
+  "extracted_data": {{ "name": "Ramesh Kumar" }}
+}}
 
 Return ONLY the JSON, no explanations."""
     
-    result = await call_openrouter(prompt)
+    result = await call_gemini(prompt)
+    
+    # Store in session
+    response_data = {
+        "question_id": question_id,
+        "field": field,
+        "question": question,
+        "asr_output": transcript,
+        "translated_text": result.get("translation", ""),
+        "llm_output": result.get("extracted_data", {}),
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    session_storage[session_id]["responses"].append(response_data)
+    print(f"Added response to session {session_id}, total: {len(session_storage[session_id]['responses'])}")
+
     return {
         "status": "success",
-        "data": result
+        "data": result.get("extracted_data", {}),
+        "translation": result.get("translation", "")
     }
 
+def generate_ats_resume_pdf(profile: Dict[str, Any], output_path: str):
+    """Generate an ATS-friendly PDF resume from profile data."""
+    doc = SimpleDocTemplate(output_path, pagesize=letter,
+                           rightMargin=0.75*inch, leftMargin=0.75*inch,
+                           topMargin=0.75*inch, bottomMargin=0.75*inch)
+    
+    story = []
+    styles = getSampleStyleSheet()
+    
+    # Custom styles
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#1a1a1a'),
+        spaceAfter=6,
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold'
+    )
+    
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=12,
+        textColor=colors.HexColor('#2c3e50'),
+        spaceAfter=6,
+        spaceBefore=12,
+        fontName='Helvetica-Bold',
+        borderWidth=1,
+        borderColor=colors.HexColor('#2c3e50'),
+        borderPadding=3,
+        backColor=colors.HexColor('#ecf0f1')
+    )
+    
+    normal_style = styles['Normal']
+    normal_style.fontSize = 10
+    normal_style.leading = 14
+    
+    # Name and Contact
+    name = profile.get('name', 'Candidate Name')
+    story.append(Paragraph(name.upper(), title_style))
+    story.append(Spacer(1, 0.1*inch))
+    
+    # Contact information
+    contact_parts = []
+    if profile.get('email'):
+        contact_parts.append(profile['email'])
+    if profile.get('phone'):
+        contact_parts.append(profile['phone'])
+    if profile.get('location'):
+        contact_parts.append(profile['location'])
+    
+    if contact_parts:
+        contact_text = ' | '.join(contact_parts)
+        contact_style = ParagraphStyle('Contact', parent=normal_style, alignment=TA_CENTER, fontSize=9)
+        story.append(Paragraph(contact_text, contact_style))
+        story.append(Spacer(1, 0.15*inch))
+    
+    # Links
+    links = profile.get('links', {})
+    if links and isinstance(links, dict):
+        link_parts = []
+        if links.get('linkedin'):
+            link_parts.append(f"LinkedIn: {links['linkedin']}")
+        if links.get('github'):
+            link_parts.append(f"GitHub: {links['github']}")
+        if link_parts:
+            link_text = ' | '.join(link_parts)
+            story.append(Paragraph(link_text, contact_style))
+            story.append(Spacer(1, 0.15*inch))
+    
+    # Professional Summary
+    summary = profile.get('summary', '')
+    if summary:
+        story.append(Paragraph('PROFESSIONAL SUMMARY', heading_style))
+        story.append(Paragraph(summary, normal_style))
+        story.append(Spacer(1, 0.1*inch))
+    
+    # Skills
+    skills = profile.get('skills', [])
+    if skills and isinstance(skills, list):
+        story.append(Paragraph('SKILLS', heading_style))
+        skills_text = ' • '.join(skills) if skills else 'N/A'
+        story.append(Paragraph(skills_text, normal_style))
+        story.append(Spacer(1, 0.1*inch))
+    
+    # Experience
+    experience_details = profile.get('experience_details', [])
+    if experience_details and isinstance(experience_details, list):
+        story.append(Paragraph('PROFESSIONAL EXPERIENCE', heading_style))
+        for exp in experience_details:
+            if isinstance(exp, dict):
+                company = exp.get('company', 'Company')
+                role = exp.get('role', 'Role')
+                duration = exp.get('duration', '')
+                description = exp.get('description', '')
+                
+                exp_header = f"<b>{role}</b> - {company}"
+                if duration:
+                    exp_header += f" ({duration})"
+                story.append(Paragraph(exp_header, normal_style))
+                
+                if description:
+                    story.append(Paragraph(f"• {description}", normal_style))
+                story.append(Spacer(1, 0.08*inch))
+    
+    # Education
+    education = profile.get('education', [])
+    if education and isinstance(education, list):
+        story.append(Paragraph('EDUCATION', heading_style))
+        for edu in education:
+            if isinstance(edu, dict):
+                degree = edu.get('degree', 'Degree')
+                institution = edu.get('institution', 'Institution')
+                year = edu.get('year', '')
+                
+                edu_text = f"<b>{degree}</b> - {institution}"
+                if year:
+                    edu_text += f" ({year})"
+                story.append(Paragraph(edu_text, normal_style))
+                story.append(Spacer(1, 0.08*inch))
+    
+    # Certifications
+    certifications = profile.get('certifications', [])
+    if certifications and isinstance(certifications, list) and certifications:
+        story.append(Paragraph('CERTIFICATIONS', heading_style))
+        for cert in certifications:
+            if cert:
+                story.append(Paragraph(f"• {cert}", normal_style))
+        story.append(Spacer(1, 0.1*inch))
+    
+    # Languages
+    languages = profile.get('languages', [])
+    if languages and isinstance(languages, list):
+        story.append(Paragraph('LANGUAGES', heading_style))
+        lang_text = ', '.join(languages) if languages else 'N/A'
+        story.append(Paragraph(lang_text, normal_style))
+    
+    # Build PDF
+    doc.build(story)
+    print(f"PDF generated: {output_path}")
+
 @app.post("/build_profile")
+async def build_profile(payload: Dict[str, Any] = Body(...)):
+    """
+    Builds final profile from session data, generates ATS resume PDF.
+    Payload: { "session_id": "..." }
+    """
+    session_id = payload.get("session_id")
+    
+    if not session_id or session_id not in session_storage:
+        raise HTTPException(status_code=400, detail="Invalid or missing session_id")
+    
+    session_data = session_storage[session_id]
+    responses = session_data["responses"]
+    
+    if not responses:
+        raise HTTPException(status_code=400, detail="No responses found in session")
+    
+    # Merge all Q&A responses
+    merged_data = {}
+    for item in responses:
+        if "llm_output" in item and isinstance(item["llm_output"], dict):
+            merged_data.update(item["llm_output"])
+    
+    # Create ATS-optimized resume using LLM
+    prompt = f"""Here is raw resume data collected from a user interview:
+{json.dumps(merged_data, indent=2)}
+
+Please create an ATS-optimized professional resume in JSON format. Make it comprehensive and well-structured for Applicant Tracking Systems.
+
+Return a JSON with these fields:
+- name (string): Full name
+- role (string): Professional title/desired position
+- email (string): Email address
+- phone (string): Phone number
+- location (string): City, State/Country
+- links (object): {{"linkedin": "url", "github": "url", "portfolio": "url"}}
+- summary (string): Professional summary (3-4 sentences highlighting key achievements and skills)
+- experience_years (number): Total years of experience
+- experience_details (array): [{{
+    "company": "Company Name",
+    "role": "Job Title",
+    "duration": "Month Year - Month Year",
+    "description": "Key achievements and responsibilities"
+  }}]
+- skills (array): Technical and professional skills
+- education (array): [{{
+    "degree": "Degree Name",
+    "institution": "University Name",
+    "year": "Year"
+  }}]
+- certifications (array): List of certifications
+- languages (array): Languages spoken
+- extras (object): Any additional relevant information
+
+Use proper formatting, action verbs, and quantifiable achievements where possible. Return ONLY valid JSON."""
+    
+    result = await call_gemini(prompt, system_message="You are an expert ATS resume writer. Create professional, keyword-rich resumes optimized for Applicant Tracking Systems.")
+    
+    # Mark session as completed
+    session_data["metadata"]["completed"] = True
+    session_data["metadata"]["completed_at"] = datetime.now().isoformat()
+    session_data["profile"] = result
+    
+    # Save session data and generate PDF
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        name = result.get("name", "unknown").replace(" ", "_").replace("/", "_")
+        
+        # Save complete session JSON
+        json_filename = os.path.join(DATABASE_DIR, f"session_{timestamp}_{name}.json")
+        with open(json_filename, "w", encoding="utf-8") as f:
+            json.dump(session_data, f, indent=2, ensure_ascii=False)
+        print(f"Saved session data to {json_filename}")
+        
+        # Generate PDF resume
+        pdf_filename = os.path.join(DATABASE_DIR, f"resume_{timestamp}_{name}.pdf")
+        generate_ats_resume_pdf(result, pdf_filename)
+        print(f"Generated PDF resume: {pdf_filename}")
+        
+        # Clean up session from memory
+        del session_storage[session_id]
+        print(f"Cleaned up session: {session_id}")
+        
+    except Exception as e:
+        print(f"Failed to save session/PDF: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate resume: {str(e)}")
+    
+    return {
+        "status": "success",
+        "profile": result,
+        "pdf_filename": f"resume_{timestamp}_{name}.pdf"
+    }
+
+@app.get("/download_resume/{filename}")
+async def download_resume(filename: str):
+    """Download generated PDF resume."""
+    filepath = os.path.join(DATABASE_DIR, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Resume not found")
+    return FileResponse(filepath, media_type='application/pdf', filename=filename)
+
+@app.post("/build_profile_legacy")
 async def build_profile(payload: Dict[str, Any] = Body(...)):
     """
     Accepts array of Q&A JSON responses, merges and normalizes into final profile.
@@ -278,7 +588,20 @@ Please normalize and structure this into a clean professional resume JSON with t
 
 Return ONLY a valid JSON object with all available fields. Use null for missing fields."""
     
-    result = await call_openrouter(prompt, system_message="You are an expert resume builder that creates structured JSON profiles.")
+    result = await call_gemini(prompt, system_message="You are an expert resume builder that creates structured JSON profiles.")
+    
+    # Save final resume to database
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        name = result.get("name", "unknown").replace(" ", "_")
+        filename = os.path.join(DATABASE_DIR, f"resume_{timestamp}_{name}.json")
+        
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
+            
+        print(f"Saved resume to {filename}")
+    except Exception as e:
+        print(f"Failed to save resume: {e}")
     
     return {
         "status": "success",

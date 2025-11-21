@@ -25,17 +25,18 @@ function App() {
   const [currentStep, setCurrentStep] = useState('welcome') // welcome, qa, profile
   const [selectedLanguage, setSelectedLanguage] = useState('hi')
   const [languages, setLanguages] = useState(DEFAULT_LANGUAGES)
-  
+
   // Q&A State
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [qaResponses, setQaResponses] = useState([])
   const [isProcessingAnswer, setIsProcessingAnswer] = useState(false)
   const [textAnswer, setTextAnswer] = useState('')
-  
+  const [sessionId, setSessionId] = useState(null)
+
   // Profile State
   const [finalProfile, setFinalProfile] = useState(null)
   const [isBuildingProfile, setIsBuildingProfile] = useState(false)
-  
+
   // Error & Status
   const [error, setError] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
@@ -66,12 +67,30 @@ function App() {
     fetchLanguages()
   }, [])
 
-  const handleStartQA = () => {
-    setCurrentStep('qa')
-    setCurrentQuestionIndex(0)
-    setQaResponses([])
-    setError('')
-    setTextAnswer('')
+  const handleStartQA = async () => {
+    try {
+      // Create a new session
+      const response = await fetch(`${API_BASE_URL}/start_session`, {
+        method: 'POST'
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to start session')
+      }
+      
+      const data = await response.json()
+      setSessionId(data.session_id)
+      console.log('Session started:', data.session_id)
+      
+      setCurrentStep('qa')
+      setCurrentQuestionIndex(0)
+      setQaResponses([])
+      setError('')
+      setTextAnswer('')
+    } catch (err) {
+      console.error('Session start error:', err)
+      setError('Failed to start session. Please try again.')
+    }
   }
 
   const handleRecordingComplete = async (audioFile) => {
@@ -112,9 +131,11 @@ function App() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          session_id: sessionId,
           transcript: transcript,
           question: currentQuestion.question,
-          field: currentQuestion.field
+          field: currentQuestion.field,
+          question_id: currentQuestion.id
         })
       })
 
@@ -124,14 +145,14 @@ function App() {
       }
 
       const llmData = await llmResponse.json()
-      
+
       // Store the Q&A response
       const newResponse = {
         question_id: currentQuestion.id,
         field: currentQuestion.field,
         question: currentQuestion.question,
         transcript: transcript,
-        extracted_data: llmData.extracted_data || {}
+        extracted_data: llmData.data || {}
       }
 
       const updatedResponses = [...qaResponses, newResponse]
@@ -160,7 +181,7 @@ function App() {
 
   const buildFinalProfile = async (responses) => {
     setIsBuildingProfile(true)
-    setStatusMessage('Building your resume profile...')
+    setStatusMessage('Building your ATS-optimized resume...')
     setCurrentStep('profile')
 
     try {
@@ -169,7 +190,7 @@ function App() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ qa_responses: responses })
+        body: JSON.stringify({ session_id: sessionId })
       })
 
       if (!response.ok) {
@@ -179,8 +200,14 @@ function App() {
 
       const data = await response.json()
       setFinalProfile(data.profile)
-      setStatusMessage('Profile created successfully!')
       
+      // Store PDF filename for download
+      if (data.pdf_filename) {
+        setFinalProfile(prev => ({ ...prev, pdf_filename: data.pdf_filename }))
+      }
+      
+      setStatusMessage('Resume created successfully!')
+
     } catch (err) {
       console.error('Profile building error:', err)
       setError(err.message || 'Failed to build profile')
@@ -207,9 +234,11 @@ function App() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          session_id: sessionId,
           transcript: textAnswer,
           question: currentQuestion.question,
-          field: currentQuestion.field
+          field: currentQuestion.field,
+          question_id: currentQuestion.id
         })
       })
 
@@ -219,7 +248,7 @@ function App() {
       }
 
       const llmData = await llmResponse.json()
-      
+
       const newResponse = {
         question_id: currentQuestion.id,
         field: currentQuestion.field,
@@ -300,7 +329,7 @@ function App() {
         <div className="shape shape-3"></div>
       </div>
 
-      <button 
+      <button
         className="dark-mode-toggle"
         onClick={() => setDarkMode(!darkMode)}
         aria-label="Toggle dark mode"
@@ -388,16 +417,16 @@ function App() {
                   <div className="input-method-divider">
                     <span>Record with voice</span>
                   </div>
-                  
+
                   <AudioRecorder
                     onRecordingComplete={handleRecordingComplete}
                     disabled={isProcessingAnswer}
                   />
-                  
+
                   <div className="input-method-divider">
                     <span>Or type your answer</span>
                   </div>
-                  
+
                   <div className="text-input-container">
                     <textarea
                       className="text-answer-input"
@@ -407,7 +436,7 @@ function App() {
                       rows={4}
                       disabled={isProcessingAnswer}
                     />
-                    <button 
+                    <button
                       className="submit-text-button"
                       onClick={handleTextSubmit}
                       disabled={isProcessingAnswer || !textAnswer.trim()}
@@ -416,7 +445,7 @@ function App() {
                       Submit Answer
                     </button>
                   </div>
-                  
+
                   <button className="skip-button" onClick={handleSkipQuestion}>
                     Skip Question
                   </button>
@@ -458,8 +487,17 @@ function App() {
           <div className="profile-screen">
             <div className="profile-header">
               <h2 className="profile-title">
-                {isBuildingProfile ? 'Creating Your Profile...' : 'Your Resume Profile'}
+                {isBuildingProfile ? 'Creating Your ATS Resume...' : 'Your ATS-Optimized Resume'}
               </h2>
+              {finalProfile && finalProfile.pdf_filename && !isBuildingProfile && (
+                <a
+                  href={`${API_BASE_URL}/download_resume/${finalProfile.pdf_filename}`}
+                  download
+                  className="download-pdf-button"
+                >
+                  📄 Download PDF Resume
+                </a>
+              )}
             </div>
 
             {isBuildingProfile && (
@@ -539,8 +577,8 @@ function App() {
                     <div className="profile-section">
                       <h3 className="section-title">Skills</h3>
                       <div className="tags-container">
-                        {(Array.isArray(finalProfile.skills) 
-                          ? finalProfile.skills 
+                        {(Array.isArray(finalProfile.skills)
+                          ? finalProfile.skills
                           : finalProfile.skills.split(',').map(s => s.trim())
                         ).map((skill, idx) => (
                           <span key={idx} className="tag">{skill}</span>
