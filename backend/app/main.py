@@ -884,3 +884,14 @@ def list_languages():
 def model_status():
     asr_loaded = _asr_model is not None
     return {"asr_model_loaded": asr_loaded, "device": DEVICE}
+
+@app.api_route("/audio/{language}/{filename}", methods=["GET", "HEAD"])
+async def serve_audio(language: str, filename: str):
+    """Serve TTS audio files for questions."""
+    audio_dir = os.path.join(os.path.dirname(__file__), "audio", language)
+    audio_path = os.path.join(audio_dir, filename)
+    
+    if not os.path.exists(audio_path):
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    
+    return FileResponse(audio_path, media_type='audio/mpeg')

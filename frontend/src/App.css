@@ -379,6 +379,128 @@ body.dark-mode .title-large {
   animation: slideIn 0.5s ease;
 }
 
+.question-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+  margin-bottom: 0.5rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.question-text-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.audio-controls {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.audio-control-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  min-width: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.audio-control-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.audio-control-button:active {
+  transform: translateY(0);
+}
+
+.pause-button {
+  background: linear-gradient(135deg, #48c774 0%, #38a169 100%);
+}
+
+.replay-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.audio-status-message {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #e3f2fd;
+  border-left: 3px solid #2196f3;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  color: #1976d2;
+}
+
+body.dark-mode .audio-status-message {
+  background: rgba(33, 150, 243, 0.1);
+  border-left-color: #42a5f5;
+  color: #90caf9;
+}
+
+/* Mobile responsive styles for audio controls */
+@media (max-width: 768px) {
+  .question-header-row {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .audio-controls {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .audio-control-button {
+    flex: 1;
+    max-width: 120px;
+    padding: 0.8rem 1.2rem;
+    font-size: 1.4rem;
+  }
+  
+  .question-card {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .audio-control-button {
+    padding: 0.7rem 1rem;
+    font-size: 1.2rem;
+    min-width: 44px;
+  }
+  
+  .audio-controls {
+    gap: 0.75rem;
+  }
+}
+
+.info-icon {
+  font-size: 1.1rem;
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;

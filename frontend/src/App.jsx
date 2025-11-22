@@ -46,6 +46,12 @@ function App() {
   const [error, setError] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
 
+  // Audio TTS State
+  const [questionAudio, setQuestionAudio] = useState(null)
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const [audioAvailable, setAudioAvailable] = useState(true)
+  const [audioError, setAudioError] = useState('')
+
   useEffect(() => {
     if (darkMode) {
       document.body.classList.add('dark-mode')
@@ -71,6 +77,107 @@ function App() {
     }
     fetchLanguages()
   }, [])
+
+  // Load question audio when question changes or language changes
+  useEffect(() => {
+    if (currentStep === 'qa' && currentQuestionIndex >= 0) {
+      loadQuestionAudio()
+    }
+  }, [currentQuestionIndex, selectedLanguage, currentStep])
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (questionAudio) {
+        questionAudio.pause()
+        questionAudio.currentTime = 0
+      }
+    }
+  }, [questionAudio])
+
+  const loadQuestionAudio = async () => {
+    // Stop any currently playing audio
+    if (questionAudio) {
+      questionAudio.pause()
+      questionAudio.currentTime = 0
+    }
+
+    const currentQuestion = RESUME_QUESTIONS[currentQuestionIndex]
+    const audioPath = `${API_BASE_URL}/audio/${selectedLanguage}/q${currentQuestion.id}.mp3`
+
+    try {
+      // Check if audio file exists
+      const response = await fetch(audioPath, { method: 'HEAD' })
+      
+      if (response.ok) {
+        const audio = new Audio(audioPath)
+        
+        audio.addEventListener('ended', () => {
+          setIsPlayingAudio(false)
+        })
+        
+        audio.addEventListener('error', () => {
+          setAudioAvailable(false)
+          setAudioError('TTS not available for this language')
+        })
+        
+        setQuestionAudio(audio)
+        setAudioAvailable(true)
+        setAudioError('')
+        
+        // Auto-play the question audio
+        audio.play().catch(() => {
+          setIsPlayingAudio(false)
+        })
+        setIsPlayingAudio(true)
+      } else {
+        setQuestionAudio(null)
+        setAudioAvailable(false)
+        setAudioError('TTS not available for this language')
+      }
+    } catch (err) {
+      console.log('Audio load error:', err)
+      setQuestionAudio(null)
+      setAudioAvailable(false)
+      setAudioError('TTS not available for this language')
+    }
+  }
+
+  const handleReplayAudio = () => {
+    if (questionAudio && audioAvailable) {
+      questionAudio.currentTime = 0
+      questionAudio.play().then(() => {
+        setIsPlayingAudio(true)
+      }).catch((err) => {
+        console.error('Replay error:', err)
+        setIsPlayingAudio(false)
+      })
+    }
+  }
+
+  const stopQuestionAudio = () => {
+    if (questionAudio && isPlayingAudio) {
+      questionAudio.pause()
+      questionAudio.currentTime = 0
+      setIsPlayingAudio(false)
+    }
+  }
+
+  const handlePauseAudio = () => {
+    if (questionAudio && audioAvailable) {
+      if (isPlayingAudio) {
+        questionAudio.pause()
+        setIsPlayingAudio(false)
+      } else {
+        questionAudio.play().then(() => {
+          setIsPlayingAudio(true)
+        }).catch((err) => {
+          console.error('Play error:', err)
+          setIsPlayingAudio(false)
+        })
+      }
+    }
+  }
 
   const handleStartQA = async () => {
     try {
@@ -99,6 +206,7 @@ function App() {
   }
 
   const handleRecordingComplete = async (audioFile) => {
+    stopQuestionAudio() // Stop audio when recording completes
     setIsProcessingAnswer(true)
     setError('')
     setStatusMessage('Transcribing your answer...')
@@ -259,6 +367,7 @@ function App() {
   }
 
   const handleTextSubmit = async () => {
+    stopQuestionAudio() // Stop audio when submitting text
     if (!textAnswer.trim()) {
       setError('Please enter an answer or use voice recording')
       return
@@ -450,8 +559,36 @@ function App() {
             </div>
 
             <div className="question-card">
-              <div className="question-number">Q{currentQuestionIndex + 1}</div>
-              <h3 className="question-text">{currentQuestion.question}</h3>
+              <div className="question-header-row">
+                <div className="question-text-wrapper">
+                  <div className="question-number">Q{currentQuestionIndex + 1}</div>
+                  <h3 className="question-text">{currentQuestion.question}</h3>
+                </div>
+                {audioAvailable && questionAudio && (
+                  <div className="audio-controls">
+                    <button 
+                      className="audio-control-button pause-button"
+                      onClick={handlePauseAudio}
+                      title={isPlayingAudio ? "Pause audio" : "Play audio"}
+                    >
+                      {isPlayingAudio ? '⏸️' : '▶️'}
+                    </button>
+                    <button 
+                      className="audio-control-button replay-button"
+                      onClick={handleReplayAudio}
+                      title="Replay question audio"
+                    >
+                      🔁
+                    </button>
+                  </div>
+                )}
+              </div>
+              {audioError && !audioAvailable && (
+                <div className="audio-status-message">
+                  <span className="info-icon">ℹ️</span>
+                  <span>{audioError}</span>
+                </div>
+              )}
               <p className="question-prompt">{currentQuestion.prompt}</p>
 
               {!isProcessingAnswer && !statusMessage && (
@@ -462,6 +599,7 @@ function App() {
 
                   <AudioRecorder
                     onRecordingComplete={handleRecordingComplete}
+                    onRecordStart={stopQuestionAudio}
                     disabled={isProcessingAnswer}
                   />
 

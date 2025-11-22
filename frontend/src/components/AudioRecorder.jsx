@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import './AudioRecorder.css'
 
-const AudioRecorder = ({ onRecordingComplete, disabled = false }) => {
+const AudioRecorder = ({ onRecordingComplete, onRecordStart, disabled = false }) => {
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [audioURL, setAudioURL] = useState(null)
@@ -77,6 +77,11 @@ const AudioRecorder = ({ onRecordingComplete, disabled = false }) => {
   }
 
   const startRecording = async () => {
+    // Call onRecordStart callback if provided
+    if (onRecordStart) {
+      onRecordStart()
+    }
+    
     try {
       // Check if mediaDevices is available
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
