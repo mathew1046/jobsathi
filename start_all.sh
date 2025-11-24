@@ -13,9 +13,9 @@ echo ""
 
 # Start backend in background
 echo "🔧 Starting backend API server..."
-cd "$SCRIPT_DIR/backend/app"
+cd "$SCRIPT_DIR/backend"
 source "$SCRIPT_DIR/venv/bin/activate"
-python -m uvicorn main:app --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
 BACKEND_PID=$!
 echo "✓ Backend started (PID: $BACKEND_PID)"
 echo "  URL: http://localhost:8000"

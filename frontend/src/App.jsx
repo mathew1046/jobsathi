@@ -696,31 +696,31 @@ function App() {
                       {finalProfile.name && (
                         <div className="info-item">
                           <span className="info-label">Name:</span>
-                          <span className="info-value">{finalProfile.name}</span>
+                          <span className="info-value">{String(finalProfile.name)}</span>
                         </div>
                       )}
                       {finalProfile.role && (
                         <div className="info-item">
                           <span className="info-label">Role:</span>
-                          <span className="info-value">{finalProfile.role}</span>
+                          <span className="info-value">{String(finalProfile.role)}</span>
                         </div>
                       )}
                       {finalProfile.email && (
                         <div className="info-item">
                           <span className="info-label">Email:</span>
-                          <span className="info-value">{finalProfile.email}</span>
+                          <span className="info-value">{String(finalProfile.email)}</span>
                         </div>
                       )}
                       {finalProfile.phone && (
                         <div className="info-item">
                           <span className="info-label">Phone:</span>
-                          <span className="info-value">{finalProfile.phone}</span>
+                          <span className="info-value">{String(finalProfile.phone)}</span>
                         </div>
                       )}
                       {finalProfile.location && (
                         <div className="info-item">
                           <span className="info-label">Location:</span>
-                          <span className="info-value">{finalProfile.location}</span>
+                          <span className="info-value">{String(finalProfile.location)}</span>
                         </div>
                       )}
                     </div>
@@ -728,8 +728,8 @@ function App() {
 
                   {finalProfile.summary && (
                     <div className="profile-section">
-                      <h3 className="section-title">Professional Summary</h3>
-                      <p className="section-content">{finalProfile.summary}</p>
+                      <h3 className="section-title">Summary</h3>
+                      <p className="section-content">{String(finalProfile.summary)}</p>
                     </div>
                   )}
 
@@ -737,14 +737,18 @@ function App() {
                     <div className="profile-section">
                       <h3 className="section-title">Experience</h3>
                       {finalProfile.experience_years && (
-                        <p className="experience-years">{finalProfile.experience_years} years</p>
+                        <p className="experience-years">{String(finalProfile.experience_years)} years</p>
                       )}
                       {Array.isArray(finalProfile.experience_details) ? (
                         finalProfile.experience_details.map((exp, idx) => (
                           <div key={idx} className="experience-item">
-                            <h4 className="exp-role">{exp.role || 'Role'}</h4>
-                            <p className="exp-company">{exp.company || 'Company'} • {exp.duration || 'Duration'}</p>
-                            <p className="exp-description">{exp.description || ''}</p>
+                            <h4 className="exp-role">{typeof exp === 'object' ? (exp.role || 'Role') : String(exp)}</h4>
+                            {typeof exp === 'object' && (
+                              <>
+                                <p className="exp-company">{String(exp.company || 'Company')} • {String(exp.duration || 'Duration')}</p>
+                                <p className="exp-description">{String(exp.description || '')}</p>
+                              </>
+                            )}
                           </div>
                         ))
                       ) : (
@@ -761,7 +765,7 @@ function App() {
                           ? finalProfile.skills
                           : finalProfile.skills.split(',').map(s => s.trim())
                         ).map((skill, idx) => (
-                          <span key={idx} className="tag">{skill}</span>
+                          <span key={idx} className="tag">{typeof skill === 'object' ? JSON.stringify(skill) : String(skill)}</span>
                         ))}
                       </div>
                     </div>
@@ -773,8 +777,10 @@ function App() {
                       {Array.isArray(finalProfile.education) ? (
                         finalProfile.education.map((edu, idx) => (
                           <div key={idx} className="education-item">
-                            <h4 className="edu-degree">{edu.degree || 'Degree'}</h4>
-                            <p className="edu-institution">{edu.institution || 'Institution'} • {edu.year || 'Year'}</p>
+                            <h4 className="edu-degree">{typeof edu === 'object' ? (edu.degree || 'Degree') : String(edu)}</h4>
+                            {typeof edu === 'object' && (
+                              <p className="edu-institution">{String(edu.institution || 'Institution')} • {String(edu.year || 'Year')}</p>
+                            )}
                           </div>
                         ))
                       ) : (
@@ -789,7 +795,7 @@ function App() {
                       {Array.isArray(finalProfile.certifications) ? (
                         <ul className="cert-list">
                           {finalProfile.certifications.map((cert, idx) => (
-                            <li key={idx}>{cert}</li>
+                            <li key={idx}>{typeof cert === 'object' ? JSON.stringify(cert) : String(cert)}</li>
                           ))}
                         </ul>
                       ) : (
@@ -801,7 +807,7 @@ function App() {
                   {finalProfile.projects && (
                     <div className="profile-section">
                       <h3 className="section-title">Notable Projects</h3>
-                      <p className="section-content">{finalProfile.projects}</p>
+                      <p className="section-content">{String(finalProfile.projects)}</p>
                     </div>
                   )}
 
@@ -811,7 +817,12 @@ function App() {
                       {Array.isArray(finalProfile.languages) ? (
                         <div className="tags-container">
                           {finalProfile.languages.map((lang, idx) => (
-                            <span key={idx} className="tag">{lang}</span>
+                            <span key={idx} className="tag">
+                              {typeof lang === 'object' 
+                                ? `${lang.language || lang.name || 'Language'}${lang.proficiency ? ` (${lang.proficiency})` : ''}` 
+                                : String(lang)
+                              }
+                            </span>
                           ))}
                         </div>
                       ) : (
@@ -828,8 +839,8 @@ function App() {
                           {Object.entries(finalProfile.links).map(([key, value]) => (
                             value && (
                               <div key={key} className="link-item">
-                                <span className="link-label">{key}:</span>
-                                <a href={value.startsWith('http') ? value : `https://${value}`} target="_blank" rel="noopener noreferrer" className="link-value">{value}</a>
+                                <span className="link-label">{String(key)}:</span>
+                                <a href={String(value).startsWith('http') ? String(value) : `https://${String(value)}`} target="_blank" rel="noopener noreferrer" className="link-value">{String(value)}</a>
                               </div>
                             )
                           ))}
@@ -847,8 +858,8 @@ function App() {
                         <div className="extras-container">
                           {Object.entries(finalProfile.extras).map(([key, value]) => (
                             <div key={key} className="extra-item">
-                              <span className="extra-label">{key}:</span>
-                              <span className="extra-value">{typeof value === 'string' ? value : JSON.stringify(value)}</span>
+                              <span className="extra-label">{String(key)}:</span>
+                              <span className="extra-value">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</span>
                             </div>
                           ))}
                         </div>

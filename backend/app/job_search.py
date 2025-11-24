@@ -28,7 +28,7 @@ def generate_keywords(profile: Dict[str, Any]) -> List[str]:
 
     # Primary role - highest priority
     role = profile.get("role", "")
-    if role and role.lower() not in ['null', 'none', '']:
+    if role and isinstance(role, str) and role.lower() not in ['null', 'none', '']:
         keywords.add(role.strip())
     
     # Skills - add ALL relevant skills
@@ -68,7 +68,7 @@ def generate_keywords(profile: Dict[str, Any]) -> List[str]:
                 keywords.add(cert.strip())
     
     # Remove any null, empty, or invalid keywords
-    keywords = {k for k in keywords if k and k.lower() not in ['null', 'none', 'n/a', '']}
+    keywords = {k for k in keywords if k and isinstance(k, str) and k.lower() not in ['null', 'none', 'n/a', '']}
     
     # Prioritize role and skills, limit total to avoid too many API calls
     keyword_list = list(keywords)
@@ -202,9 +202,9 @@ def merge_results(*sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         for job in source:
             # Create unique identifier
             uid = (
-                job.get("title", "").lower().strip(),
-                job.get("company", "").lower().strip(),
-                job.get("location", "").lower().strip()
+                str(job.get("title", "")).lower().strip(),
+                str(job.get("company", "")).lower().strip(),
+                str(job.get("location", "")).lower().strip()
             )
             
             if uid not in seen and job.get("title"):
@@ -221,15 +221,16 @@ def score_relevance(job: Dict[str, Any], profile: Dict[str, Any]) -> int:
     """Score job relevance based on profile match."""
     score = 0
     
-    job_title = job.get("title", "").lower()
-    job_desc = job.get("description", "").lower()
+    job_title = str(job.get("title", "")).lower()
+    job_desc = str(job.get("description", "")).lower()
     
     # Check role match (highest weight)
-    role = profile.get("role", "").lower()
-    if role and role.lower() not in ['null', 'none', '']:
-        if role in job_title:
+    role = profile.get("role", "")
+    if role and isinstance(role, str) and role.lower() not in ['null', 'none', '']:
+        role_lower = role.lower()
+        if role_lower in job_title:
             score += 15
-        if role in job_desc:
+        if role_lower in job_desc:
             score += 7
     
     # Check skills match
@@ -242,6 +243,14 @@ def score_relevance(job: Dict[str, Any], profile: Dict[str, Any]) -> int:
                     score += 10
                 if skill_lower in job_desc:
                     score += 4
+            elif isinstance(skill, dict):
+                # Handle skill objects with name/level properties
+                skill_name = str(skill.get('name', skill.get('skill', ''))).lower()
+                if skill_name and skill_name not in ['null', 'none', '']:
+                    if skill_name in job_title:
+                        score += 10
+                    if skill_name in job_desc:
+                        score += 4
     
     # Check certifications match
     certifications = profile.get("certifications", [])
@@ -251,16 +260,24 @@ def score_relevance(job: Dict[str, Any], profile: Dict[str, Any]) -> int:
                 cert_lower = cert.lower()
                 if cert_lower in job_title or cert_lower in job_desc:
                     score += 8
+            elif isinstance(cert, dict):
+                # Handle cert objects
+                cert_name = str(cert.get('name', cert.get('certification', ''))).lower()
+                if cert_name and cert_name not in ['null', 'none', '']:
+                    if cert_name in job_title or cert_name in job_desc:
+                        score += 8
     
     # Check education/degree match
     education = profile.get("education", [])
     if isinstance(education, list):
         for edu in education:
             if isinstance(edu, dict):
-                degree = edu.get("degree", "").lower()
-                if degree and degree not in ['null', 'none', '']:
-                    if degree in job_title or degree in job_desc:
-                        score += 6
+                degree = edu.get("degree", "")
+                if degree and isinstance(degree, str):
+                    degree_lower = degree.lower()
+                    if degree_lower and degree_lower not in ['null', 'none', '']:
+                        if degree_lower in job_title or degree_lower in job_desc:
+                            score += 6
     
     # Check experience level match
     experience_years = profile.get("experience_years")
@@ -278,8 +295,8 @@ def score_relevance(job: Dict[str, Any], profile: Dict[str, Any]) -> int:
             pass
     
     # Check location match
-    profile_location = profile.get("location", "").lower()
-    job_location = job.get("location", "").lower()
+    profile_location = str(profile.get("location", "")).lower() if profile.get("location") else ""
+    job_location = str(job.get("location", "")).lower() if job.get("location") else ""
     if profile_location and profile_location not in ['null', 'none', '']:
         if profile_location in job_location:
             score += 8
@@ -298,6 +315,12 @@ def score_relevance(job: Dict[str, Any], profile: Dict[str, Any]) -> int:
                 lang_lower = lang.lower()
                 if lang_lower in job_desc:
                     score += 4
+            elif isinstance(lang, dict):
+                # Handle language objects with language/proficiency properties
+                lang_name = str(lang.get('language', lang.get('name', ''))).lower()
+                if lang_name and lang_name not in ['null', 'none', 'english']:
+                    if lang_name in job_desc:
+                        score += 4
     
     return score
 
@@ -324,8 +347,10 @@ def search_jobs(profile: Dict[str, Any], min_score: int = 5) -> List[Dict[str, A
     
     # Get location from profile with fallback
     location = profile.get("location", "")
-    if not location or location.lower() in ['null', 'none', '']:
+    if not location or (isinstance(location, str) and location.lower() in ['null', 'none', '']):
         location = "India"  # Default fallback
+    else:
+        location = str(location)  # Ensure it's a string
     print(f"📍 Location: {location}")
     
     # Fetch from all sources
