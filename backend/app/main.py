@@ -189,10 +189,10 @@ async def transcribe(audio: UploadFile = File(...), source_language: str = Form(
         print(f"ASR transcript: {transcript}")
 
         if not transcript:
-            unload_asr_model()
+            # unload_asr_model()  # TEMPORARILY COMMENTED OUT FOR SPEED IMPROVEMENT
             raise HTTPException(400, "ASR returned empty")
 
-        unload_asr_model()
+        # unload_asr_model()  # TEMPORARILY COMMENTED OUT FOR SPEED IMPROVEMENT
         return {
             "status": "success",
             "data": {
@@ -460,6 +460,8 @@ User's answer (in English or other language): {transcript}
 5. NEVER create placeholder, example, or dummy data.
 6. If the user did not provide information for this field, return null or empty string.
 7. If the answer is unclear or vague, use null - DO NOT interpret or guess.
+8. incase of phone number or year, extract the digits and respond in standard format.
+9. Extract the skills from the text and respond it in standard keyword, which can be be further used for matching jobs. only do this for skills field.
 
 You are a DATA EXTRACTION TOOL, not a creative assistant. Your ONLY job is to copy what was said.
 
@@ -541,18 +543,18 @@ def generate_ats_resume_pdf(profile: Dict[str, Any], output_path: str):
     normal_style.leading = 14
     
     # Name and Contact
-    name = profile.get('name', 'Candidate Name')
+    name = str(profile.get('name', 'Candidate Name'))
     story.append(Paragraph(name.upper(), title_style))
     story.append(Spacer(1, 0.1*inch))
     
     # Contact information
     contact_parts = []
     if profile.get('email'):
-        contact_parts.append(profile['email'])
+        contact_parts.append(str(profile['email']))
     if profile.get('phone'):
-        contact_parts.append(profile['phone'])
+        contact_parts.append(str(profile['phone']))
     if profile.get('location'):
-        contact_parts.append(profile['location'])
+        contact_parts.append(str(profile['location']))
     
     if contact_parts:
         contact_text = ' | '.join(contact_parts)
@@ -565,9 +567,9 @@ def generate_ats_resume_pdf(profile: Dict[str, Any], output_path: str):
     if links and isinstance(links, dict):
         link_parts = []
         if links.get('linkedin'):
-            link_parts.append(f"LinkedIn: {links['linkedin']}")
+            link_parts.append(f"LinkedIn: {str(links['linkedin'])}")
         if links.get('github'):
-            link_parts.append(f"GitHub: {links['github']}")
+            link_parts.append(f"GitHub: {str(links['github'])}")
         if link_parts:
             link_text = ' | '.join(link_parts)
             story.append(Paragraph(link_text, contact_style))
@@ -577,14 +579,14 @@ def generate_ats_resume_pdf(profile: Dict[str, Any], output_path: str):
     summary = profile.get('summary', '')
     if summary:
         story.append(Paragraph('PROFESSIONAL SUMMARY', heading_style))
-        story.append(Paragraph(summary, normal_style))
+        story.append(Paragraph(str(summary), normal_style))
         story.append(Spacer(1, 0.1*inch))
     
     # Skills
     skills = profile.get('skills', [])
     if skills and isinstance(skills, list):
         story.append(Paragraph('SKILLS', heading_style))
-        skills_text = ' • '.join(skills) if skills else 'N/A'
+        skills_text = ' • '.join([str(s) for s in skills if s]) if skills else 'N/A'
         story.append(Paragraph(skills_text, normal_style))
         story.append(Spacer(1, 0.1*inch))
     
@@ -594,10 +596,10 @@ def generate_ats_resume_pdf(profile: Dict[str, Any], output_path: str):
         story.append(Paragraph('PROFESSIONAL EXPERIENCE', heading_style))
         for exp in experience_details:
             if isinstance(exp, dict):
-                company = exp.get('company', 'Company')
-                role = exp.get('role', 'Role')
-                duration = exp.get('duration', '')
-                description = exp.get('description', '')
+                company = str(exp.get('company', 'Company'))
+                role = str(exp.get('role', 'Role'))
+                duration = str(exp.get('duration', '')) if exp.get('duration') else ''
+                description = str(exp.get('description', '')) if exp.get('description') else ''
                 
                 exp_header = f"<b>{role}</b> - {company}"
                 if duration:
@@ -614,9 +616,9 @@ def generate_ats_resume_pdf(profile: Dict[str, Any], output_path: str):
         story.append(Paragraph('EDUCATION', heading_style))
         for edu in education:
             if isinstance(edu, dict):
-                degree = edu.get('degree', 'Degree')
-                institution = edu.get('institution', 'Institution')
-                year = edu.get('year', '')
+                degree = str(edu.get('degree', 'Degree'))
+                institution = str(edu.get('institution', 'Institution'))
+                year = str(edu.get('year', '')) if edu.get('year') else ''
                 
                 edu_text = f"<b>{degree}</b> - {institution}"
                 if year:
@@ -630,14 +632,14 @@ def generate_ats_resume_pdf(profile: Dict[str, Any], output_path: str):
         story.append(Paragraph('CERTIFICATIONS', heading_style))
         for cert in certifications:
             if cert:
-                story.append(Paragraph(f"• {cert}", normal_style))
+                story.append(Paragraph(f"• {str(cert)}", normal_style))
         story.append(Spacer(1, 0.1*inch))
     
     # Languages
     languages = profile.get('languages', [])
     if languages and isinstance(languages, list):
         story.append(Paragraph('LANGUAGES', heading_style))
-        lang_text = ', '.join(languages) if languages else 'N/A'
+        lang_text = ', '.join([str(lang) for lang in languages if lang]) if languages else 'N/A'
         story.append(Paragraph(lang_text, normal_style))
     
     # Build PDF
@@ -677,35 +679,24 @@ async def build_profile(payload: Dict[str, Any] = Body(...)):
 
 {full_english_text}
 
-YOUR TASK: Extract information from this English text and create a structured JSON resume.
+TASK:
+Extract information strictly from the provided English text and convert it into a structured JSON resume.
 
-🚫 FORBIDDEN ACTIONS (If you do any of these, you FAILED):
-- Adding ANY information not mentioned in the transcript above
-- Creating example emails like "john@example.com" 
-- Creating example phone numbers like "123-456-7890"
-- Adding example companies like "ABC Corporation"
-- Adding example schools like "University of XYZ"
-- Creating job descriptions if user didn't provide them
-- Adding skills the user didn't mention
-- Inventing dates, durations, or years
-- Writing professional summaries with information user didn't give
-- Assuming ANYTHING
+ABSOLUTE RULES (must NEVER be broken):
+- Do NOT create, guess, or invent any information.
+- Do NOT generate placeholder or dummy data (no fake emails, phones, companies, schools, dates, roles, etc.).
+- Do NOT infer or assume anything not explicitly stated.
+- Do NOT rewrite or improve content except for skill normalization.
+- Anything missing must remain null, [], or {{}} exactly as instructed.
 
-✅ ALLOWED ACTIONS:
-- Copy EXACT values from the raw data
-- Organize the data into proper structure
-- Use null for missing fields
-- Use [] for empty arrays
-- Use {{}} for empty objects
+ALLOWED ACTIONS:
+- Copy all information exactly as written in the source text.
+- Standardize skill-like phrases into globally recognized skill names (e.g., “i drive cars” → "driver").
+- Convert all number words into numeric digits (e.g., “five” → 5).
+- Do not add extra text, summaries, or interpretations.
 
-EXAMPLE OF CORRECT BEHAVIOR:
-If raw data has: {{"name": "John", "role": "driver"}}
-Then output should have ONLY: {{"name": "John", "role": "driver", ...all other fields null/empty}}
+OUTPUT FORMAT (fill ONLY fields present in the text; everything else stays null/empty):
 
-If raw data has: {{"name": "John"}} (no role mentioned)
-Then output: {{"name": "John", "role": null, ...}}
-
-Return JSON with these fields (ONLY use data from above, use null/[]/{{}} for missing):
 {{
   "name": null,
   "role": null,
@@ -723,7 +714,12 @@ Return JSON with these fields (ONLY use data from above, use null/[]/{{}} for mi
   "extras": {{}}
 }}
 
-Fill ONLY the fields where you have ACTUAL data from the raw data above. Everything else stays null/[]/{{}}."""
+NOTES:
+- If the user doesn't provide a value, leave the field null/empty.
+- Skill normalization is allowed, but no new skills should be added.
+- Number words must always be converted to digits.
+- No assumptions. No hallucinations. No invented data.
+"""
     
     result = await call_gemini(prompt, system_message="You are a JSON converter. Your ONLY job is to copy data from input to output structure. You MUST NOT generate, create, or invent ANY data. If a field has no data, output null or []. Outputting fake data is a critical error.")
 
@@ -731,7 +727,7 @@ Fill ONLY the fields where you have ACTUAL data from the raw data above. Everyth
     print("🔍 Validating data for fake patterns...")
     
     # Build a validation text from all English responses for cross-checking
-    validation_text = " ".join([item.get("translated_text", "").lower() for item in responses])
+    validation_text = " ".join([str(item.get("translated_text", "")).lower() for item in responses])
     
     cleaned_result = validate_and_clean_data(result, validation_text)
     print("✅ Data validation complete")
@@ -882,3 +878,14 @@ def list_languages():
 def model_status():
     asr_loaded = _asr_model is not None
     return {"asr_model_loaded": asr_loaded, "device": DEVICE}
+
+@app.api_route("/audio/{language}/{filename}", methods=["GET", "HEAD"])
+async def serve_audio(language: str, filename: str):
+    """Serve TTS audio files for questions."""
+    audio_dir = os.path.join(os.path.dirname(__file__), "audio", language)
+    audio_path = os.path.join(audio_dir, filename)
+    
+    if not os.path.exists(audio_path):
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    
+    return FileResponse(audio_path, media_type='audio/mpeg')
