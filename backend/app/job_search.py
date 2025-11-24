@@ -347,7 +347,8 @@ def search_jobs(profile: Dict[str, Any], min_score: int = 5) -> List[Dict[str, A
     
     # Get location from profile with fallback
     location = profile.get("location", "")
-    if not location or (isinstance(location, str) and location.lower() in ['null', 'none', '']):\n        location = "India"  # Default fallback
+    if not location or (isinstance(location, str) and location.lower() in ['null', 'none', '']):
+        location = "India"  # Default fallback
     else:
         location = str(location)  # Ensure it's a string
     print(f"📍 Location: {location}")

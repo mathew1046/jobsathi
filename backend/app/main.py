@@ -22,7 +22,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
-from job_search import search_jobs
+from .job_search import search_jobs
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -386,7 +386,7 @@ def validate_and_clean_data(data: Dict[str, Any], user_text: str = "") -> Dict[s
     return cleaned
 
 
-async def call_gemini(prompt: str, system_message: str = "You are a strict data extraction tool. Extract ONLY what is explicitly stated. NEVER fabricate, invent, or assume information.") -> Dict[str, Any]:
+async def call_gemini(prompt: str, system_message: str = "You are a strict data extraction tool. Extract ONLY what is explicitly stated. NEVER fabricate, invent, or assume information. convert the user statement to formal text without assuming anything") -> Dict[str, Any]:
     """Call Gemini API with given prompt and return JSON response."""
     try:
         # Combine system message and prompt as Gemini 1.5 Flash handles context well
@@ -453,7 +453,7 @@ async def ask_llm(payload: Dict[str, Any] = Body(...)):
 User's answer (in English or other language): {transcript}
 
 ⚠️ CRITICAL RULES - VIOLATING THESE IS STRICTLY FORBIDDEN:
-1. Translate the user's answer to English EXACTLY as spoken - word for word.
+1. Translate the user's answer to English EXACTLY as spoken - word for word. and make the answer formal without assuming anything or adding any information.
 2. Extract ONLY the EXACT information the user explicitly stated.
 3. NEVER EVER add ANY information that was not directly mentioned by the user.
 4. NEVER make assumptions or guesses about missing information.
