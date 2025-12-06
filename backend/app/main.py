@@ -152,9 +152,8 @@ def save_temp_file_and_load(audio_bytes, filename_hint):
         tmp_path = tmp.name
     try:
         try:
-            # Force using the soundfile backend instead of torchcodec
-            torchaudio.set_audio_backend("soundfile")
-            waveform, sr = torchaudio.load(tmp_path)
+            # Try loading with soundfile backend explicitly
+            waveform, sr = torchaudio.load(tmp_path, backend="soundfile")
             print(f"Loaded with torchaudio (auto): shape {waveform.shape}, sr {sr}")
         except Exception as e:
             print(f"torchaudio.load auto failed: {e}. Trying mp3 format fallback.")
