@@ -727,7 +727,6 @@ NOTES:
 """
     
     result = await call_gemini(prompt, system_message="You are a JSON converter. Your ONLY job is to copy data from input to output structure. You MUST NOT generate, create, or invent ANY data. If a field has no data, output null or []. Outputting fake data is a critical error.")
-
     # ⚠️ CRITICAL: Validate and clean result to remove fake patterns
     print("🔍 Validating data for fake patterns...")
     
@@ -804,67 +803,6 @@ async def search_jobs_endpoint(payload: Dict[str, Any] = Body(...)):
     except Exception as e:
         print(f"Job search error: {e}")
         raise HTTPException(status_code=500, detail=f"Job search failed: {str(e)}")
-
-@app.post("/build_profile_legacy")
-async def build_profile(payload: Dict[str, Any] = Body(...)):
-    """
-    Accepts array of Q&A JSON responses, merges and normalizes into final profile.
-    Payload: { "qa_responses": [{ "question_id": 1, "field": "name", "extracted_data": {...} }, ...] }
-    """
-    qa_responses = payload.get("qa_responses", [])
-    if not qa_responses:
-        raise HTTPException(status_code=400, detail="Q&A responses are required")
-    
-    # Merge all Q&A responses - extract data from nested structure
-    merged_data = {}
-    for item in qa_responses:
-        # Each item has structure: { "question_id": 1, "field": "name", "extracted_data": {...} }
-        if "extracted_data" in item and isinstance(item["extracted_data"], dict):
-            merged_data.update(item["extracted_data"])
-        elif "field" in item and any(k for k in item.keys() if k not in ["question_id", "field", "question", "transcript"]):
-            # If data is at top level (legacy format)
-            field_data = {k: v for k, v in item.items() if k not in ["question_id", "field", "question", "transcript"]}
-            merged_data.update(field_data)
-    
-    prompt = f"""Here is raw resume data collected from a user interview:
-{json.dumps(merged_data, indent=2)}
-
-Please normalize and structure this into a clean professional resume JSON with these fields:
-- name (string)
-- role (string, job title/desired position)
-- experience_years (number)
-- experience_details (array of objects with: company, role, duration, description)
-- skills (array of strings)
-- languages (array of strings)
-- location (string)
-- education (array of objects with: degree, institution, year)
-- certifications (array of strings)
-- phone (string)
-- email (string)
-- summary (string, 2-3 sentences professional summary)
-- extras (object for any additional relevant info)
-
-Return ONLY a valid JSON object with all available fields. Use null for missing fields."""
-    
-    result = await call_gemini(prompt, system_message="You are an expert resume builder that creates structured JSON profiles.")
-    
-    # Save final resume to database
-    try:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        name = result.get("name", "unknown").replace(" ", "_")
-        filename = os.path.join(DATABASE_DIR, f"resume_{timestamp}_{name}.json")
-        
-        with open(filename, "w", encoding="utf-8") as f:
-            json.dump(result, f, indent=2, ensure_ascii=False)
-            
-        print(f"Saved resume to {filename}")
-    except Exception as e:
-        print(f"Failed to save resume: {e}")
-    
-    return {
-        "status": "success",
-        "profile": result
-    }
 
 @app.get("/")
 async def root():
