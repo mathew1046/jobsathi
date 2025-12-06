@@ -412,8 +412,11 @@ async def call_gemini(prompt: str, system_message: str = "You are a strict data 
     except Exception as e:
         print(f"Gemini API error: {e}")
         # Fallback or detailed error logging
-        if hasattr(e, 'response'):
-             print(f"Gemini feedback: {e.response.prompt_feedback}")
+        if hasattr(e, 'response') and e.response:
+             try:
+                 print(f"Gemini feedback: {e.response.prompt_feedback}")
+             except:
+                 pass
         raise HTTPException(status_code=500, detail=f"LLM API failed: {str(e)}")
 
 @app.post("/start_session")
