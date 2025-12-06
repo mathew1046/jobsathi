@@ -88,5 +88,36 @@ export const RESUME_QUESTIONS = [
     question: "Do you have any referrals?",
     field: "referrals",
     prompt: "Share any referrals or references you have."
+  },
+  { 
+  id: 16,
+  question: "What is your work authorization or visa status?",
+  field: "work_authorization",
+  prompt: "Specify your legal right to work (citizen, permanent resident, visa type, etc.)."
+  },
+  { 
+  id: 17,
+  question: "Which shifts are you available to work?",
+  field: "shift_availability",
+  prompt: "Select your availability: day, night, weekend, rotating shifts."
+  },
+  { 
+  id: 18,
+  question: "What is your earliest possible start date?",
+  field: "start_date",
+  prompt: "Indicate when you can begin working (e.g., immediately, 2 weeks notice)."
+  },
+  { 
+  id: 19,
+  question: "What is your primary mode of transportation?",
+  field: "transportation",
+  prompt: "Share how you commute to work (e.g., personal vehicle, public transit, carpool)."
+  },
+  { 
+  id: 20,
+  question: "Do you meet the physical requirements of the job?",
+  field: "physical_capabilities",
+  prompt: "Confirm if you can lift 50+ lbs, stand for long periods, or meet other physical demands."
   }
+
 ]
