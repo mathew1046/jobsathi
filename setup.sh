@@ -34,6 +34,7 @@ echo ""
 
 # Backend setup
 echo "📦 [2/6] Setting up backend..."
+cd backend
 if [ ! -d "venv" ]; then
     python3 -m venv venv
     echo "✓ Virtual environment created"
@@ -46,7 +47,8 @@ echo "📥 [3/6] Installing Python dependencies..."
 echo "   (This may take 5-10 minutes on first run)"
 
 pip install --upgrade pip setuptools wheel -q
-pip install -r backend/app/requirements.txt
+pip install -r app/requirements.txt
+cd ..
 
 echo "✓ Backend dependencies installed"
 echo ""
@@ -56,6 +58,7 @@ echo "💾 [4/6] Creating database directory..."
 mkdir -p backend/app/database
 echo "✓ Database directory ready"
 echo ""
+deactivate 2>/dev/null || true
 
 # Frontend setup
 echo "⚛️ [5/6] Setting up frontend..."

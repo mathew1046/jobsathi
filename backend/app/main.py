@@ -22,7 +22,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
-from .job_search import search_jobs
+from job_search import search_jobs
 from dotenv import load_dotenv
 
 # Load environment variables
