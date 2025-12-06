@@ -8,6 +8,7 @@ httpx>=0.25.0
 transformers>=4.36.0
 torch>=2.0.0
 torchaudio>=2.0.0
+onnxruntime>=1.15.0
 
 # --- Utilities ---
 requests>=2.31.0

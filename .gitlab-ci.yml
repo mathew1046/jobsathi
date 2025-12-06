@@ -13,11 +13,11 @@ variables:
 # 1. Secret Detection - Scan for exposed API keys
 secret_detection:
   stage: security
-  image: docker:latest
-  services:
-    - docker:dind
+  image: 
+    name: "registry.gitlab.com/security-products/secrets:latest"
+    entrypoint: [""]
   script:
-    - docker run --rm -v "$CI_PROJECT_DIR:/code" $SECURE_ANALYZERS_PREFIX/secrets:latest /code
+    - /analyzer run
   allow_failure: true
   only:
     - branches
@@ -65,9 +65,11 @@ container_scanning:
   image: docker:latest
   services:
     - docker:dind
+  variables:
+    TRIVY_TIMEOUT: "10m"
   script:
     - docker build -t jobsathi-backend:$CI_COMMIT_SHA .
-    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image jobsathi-backend:$CI_COMMIT_SHA
+    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -e TRIVY_TIMEOUT=$TRIVY_TIMEOUT aquasec/trivy image --timeout $TRIVY_TIMEOUT jobsathi-backend:$CI_COMMIT_SHA
   allow_failure: true
   only:
     - main
