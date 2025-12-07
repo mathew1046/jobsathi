@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import AudioRecorder from './components/AudioRecorder'
 import { RESUME_QUESTIONS } from './constants/questions'
+import Navbar from './components/home/Navbar'
+import HeroSection from './components/home/HeroSection'
+import LanguageSelector from './components/home/LanguageSelector'
+import QuestionFlowCard from './components/QuestionFlowCard'
+import ResumeResultCard from './components/ResumeResultCard'
+import Footer from './components/home/Footer'
 import './App.css'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
@@ -55,8 +62,10 @@ function App() {
   useEffect(() => {
     if (darkMode) {
       document.body.classList.add('dark-mode')
+      document.documentElement.classList.add('dark')
     } else {
       document.body.classList.remove('dark-mode')
+      document.documentElement.classList.remove('dark')
     }
   }, [darkMode])
 
@@ -108,23 +117,23 @@ function App() {
     try {
       // Check if audio file exists
       const response = await fetch(audioPath, { method: 'HEAD' })
-      
+
       if (response.ok) {
         const audio = new Audio(audioPath)
-        
+
         audio.addEventListener('ended', () => {
           setIsPlayingAudio(false)
         })
-        
+
         audio.addEventListener('error', () => {
           setAudioAvailable(false)
           setAudioError('TTS not available for this language')
         })
-        
+
         setQuestionAudio(audio)
         setAudioAvailable(true)
         setAudioError('')
-        
+
         // Auto-play the question audio
         audio.play().catch(() => {
           setIsPlayingAudio(false)
@@ -185,15 +194,15 @@ function App() {
       const response = await fetch(`${API_BASE_URL}/start_session`, {
         method: 'POST'
       })
-      
+
       if (!response.ok) {
         throw new Error('Failed to start session')
       }
-      
+
       const data = await response.json()
       setSessionId(data.session_id)
       console.log('Session started:', data.session_id)
-      
+
       setCurrentStep('qa')
       setCurrentQuestionIndex(0)
       setQaResponses([])
@@ -313,12 +322,12 @@ function App() {
 
       const data = await response.json()
       setFinalProfile(data.profile)
-      
+
       // Store PDF filename for download
       if (data.pdf_filename) {
         setFinalProfile(prev => ({ ...prev, pdf_filename: data.pdf_filename }))
       }
-      
+
       setStatusMessage('Resume created successfully!')
 
     } catch (err) {
@@ -473,504 +482,92 @@ function App() {
   const progress = ((currentQuestionIndex + 1) / RESUME_QUESTIONS.length) * 100
 
   return (
-    <div className={`app-container ${darkMode ? 'dark' : ''}`}>
-      <div className="background-animation">
-        <div className="shape shape-1"></div>
-        <div className="shape shape-2"></div>
-        <div className="shape shape-3"></div>
-      </div>
+    <div className="min-h-screen flex flex-col font-sans selection:bg-neon-purple selection:text-white">
+      <Navbar darkMode={darkMode} toggleDarkMode={() => setDarkMode(!darkMode)} />
 
-      <button
-        className="dark-mode-toggle"
-        onClick={() => setDarkMode(!darkMode)}
-        aria-label="Toggle dark mode"
-      >
-        {darkMode ? '☀️' : '🌙'}
-      </button>
-
-      <div className="content-wrapper">
-        {/* Welcome Screen */}
+      <AnimatePresence mode="wait">
+        {/* Main Content Area */}
         {currentStep === 'welcome' && (
-          <div className="welcome-screen">
-            <div className="logo-large">
-              <span className="logo-icon-large">🎙️</span>
-              <h1 className="title-large">JobSathi</h1>
-            </div>
-            <p className="subtitle">Voice-Powered Resume Builder</p>
-            <p className="description">
-              Create your professional resume in {RESUME_QUESTIONS.length} simple voice responses.
-              Powered by AI4Bharat speech recognition and AI intelligence.
-            </p>
+          <motion.main
+            key="welcome"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.02 }}
+            transition={{ duration: 0.5 }}
+            className="flex-grow flex items-center justify-center relative p-6 pt-24 min-h-[90vh]"
+          >
+            <div className="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center z-10">
+              {/* Left Column: Text & CTA */}
+              <HeroSection onStart={handleStartQA} />
 
-            <div className="language-selector-card">
-              <h3>Select Your Language</h3>
-              <p className="selector-hint">Choose the language you'll speak in</p>
-              <select
-                className="language-select-large"
-                value={selectedLanguage}
-                onChange={(e) => setSelectedLanguage(e.target.value)}
-              >
-                {languages.map(({ code, label }) => (
-                  <option key={code} value={code}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <button className="start-button" onClick={handleStartQA}>
-              <span className="btn-icon">🚀</span>
-              Start Building Resume
-            </button>
-
-            <div className="features-grid">
-              <div className="feature-item">
-                <span className="feature-icon">🎤</span>
-                <h4>Voice First</h4>
-                <p>Speak naturally in your language</p>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">🧠</span>
-                <h4>AI Powered</h4>
-                <p>Smart extraction & formatting</p>
-              </div>
-              <div className="feature-item">
-                <span className="feature-icon">⚡</span>
-                <h4>Fast & Easy</h4>
-                <p>Complete in under 10 minutes</p>
+              {/* Right Column: Language Card */}
+              <div className="flex justify-center lg:justify-end">
+                <LanguageSelector
+                  selectedLanguage={selectedLanguage}
+                  setSelectedLanguage={setSelectedLanguage}
+                  languages={languages}
+                />
               </div>
             </div>
-          </div>
+          </motion.main>
         )}
 
-        {/* Q&A Screen */}
-        {currentStep === 'qa' && (
-          <div className="qa-screen">
-            <div className="qa-header">
-              <h2 className="qa-title">Building Your Resume</h2>
-              <div className="progress-container">
-                <div className="progress-bar">
-                  <div className="progress-fill" style={{ width: `${progress}%` }}></div>
-                </div>
-                <p className="progress-text">
-                  Question {currentQuestionIndex + 1} of {RESUME_QUESTIONS.length}
-                </p>
-              </div>
-            </div>
+        {/* Legacy/Existing Views wrapped in a clean container */}
+        {currentStep !== 'welcome' && (
+          <motion.main
+            key={currentStep} // 'qa' or 'profile'
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.5 }}
+            className="flex-grow w-full max-w-screen-xl mx-auto px-4 py-24"
+          >
+            {/* Q&A Screen */}
+            {currentStep === 'qa' && (
+              <QuestionFlowCard
+                currentQuestion={currentQuestion}
+                currentIndex={currentQuestionIndex}
+                totalQuestions={RESUME_QUESTIONS.length}
+                audioControl={{
+                  isPlaying: isPlayingAudio,
+                  onPlayPause: handlePauseAudio,
+                  onReplay: handleReplayAudio,
+                  audioAvailable,
+                  error: audioError,
+                  questionAudio
+                }}
+                recordingControl={{
+                  isProcessing: isProcessingAnswer,
+                  statusMessage,
+                  onRecordingComplete: handleRecordingComplete,
+                  onRecordStart: stopQuestionAudio
+                }}
+                textControl={{
+                  textAnswer,
+                  setTextAnswer,
+                  onSubmit: handleTextSubmit
+                }}
+                onSkip={handleSkipQuestion}
+                onRestart={handleRestart}
+                error={error}
+              />
+            )}
 
-            <div className="question-card">
-              <div className="question-header-row">
-                <div className="question-text-wrapper">
-                  <div className="question-number">Q{currentQuestionIndex + 1}</div>
-                  <h3 className="question-text">{currentQuestion.question}</h3>
-                </div>
-                {audioAvailable && questionAudio && (
-                  <div className="audio-controls">
-                    <button 
-                      className="audio-control-button pause-button"
-                      onClick={handlePauseAudio}
-                      title={isPlayingAudio ? "Pause audio" : "Play audio"}
-                    >
-                      {isPlayingAudio ? '⏸️' : '▶️'}
-                    </button>
-                    <button 
-                      className="audio-control-button replay-button"
-                      onClick={handleReplayAudio}
-                      title="Replay question audio"
-                    >
-                      🔁
-                    </button>
-                  </div>
-                )}
-              </div>
-              {audioError && !audioAvailable && (
-                <div className="audio-status-message">
-                  <span className="info-icon">ℹ️</span>
-                  <span>{audioError}</span>
-                </div>
-              )}
-              <p className="question-prompt">{currentQuestion.prompt}</p>
-
-              {!isProcessingAnswer && !statusMessage && (
-                <>
-                  <div className="input-method-divider">
-                    <span>Record with voice</span>
-                  </div>
-
-                  <AudioRecorder
-                    onRecordingComplete={handleRecordingComplete}
-                    onRecordStart={stopQuestionAudio}
-                    disabled={isProcessingAnswer}
-                  />
-
-                  <div className="input-method-divider">
-                    <span>Or type your answer</span>
-                  </div>
-
-                  <div className="text-input-container">
-                    <textarea
-                      className="text-answer-input"
-                      placeholder="Type your answer here..."
-                      value={textAnswer}
-                      onChange={(e) => setTextAnswer(e.target.value)}
-                      rows={4}
-                      disabled={isProcessingAnswer}
-                    />
-                    <button
-                      className="submit-text-button"
-                      onClick={handleTextSubmit}
-                      disabled={isProcessingAnswer || !textAnswer.trim()}
-                    >
-                      <span className="btn-icon">📝</span>
-                      Submit Answer
-                    </button>
-                  </div>
-
-                  <button className="skip-button" onClick={handleSkipQuestion}>
-                    Skip Question
-                  </button>
-                </>
-              )}
-
-              {(isProcessingAnswer || statusMessage) && (
-                <div className="processing-indicator">
-                  <div className="spinner-large"></div>
-                  <p>{statusMessage}</p>
-                </div>
-              )}
-
-              {error && (
-                <div className="error-box">
-                  <span className="error-icon">⚠️</span>
-                  <p>{error}</p>
-                  <button className="retry-button" onClick={() => setError('')}>
-                    Try Again
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="qa-navigation">
-              <button
-                className="nav-button secondary"
-                onClick={handleRestart}
-                disabled={isProcessingAnswer}
-              >
-                Start Over
-              </button>
-            </div>
-          </div>
+            {/* Profile Display Screen */}
+            {currentStep === 'profile' && (
+              <ResumeResultCard
+                profile={finalProfile}
+                isBuilding={isBuildingProfile}
+                statusMessage={statusMessage}
+                onRestart={handleRestart}
+                apiBaseUrl={API_BASE_URL}
+              />
+            )}
+          </motion.main>
         )}
+      </AnimatePresence>
 
-        {/* Profile Display Screen */}
-        {currentStep === 'profile' && (
-          <div className="profile-screen">
-            <div className="profile-header">
-              <h2 className="profile-title">
-                {isBuildingProfile ? 'Creating Your ATS Resume...' : 'Your ATS-Optimized Resume'}
-              </h2>
-              {finalProfile && finalProfile.pdf_filename && !isBuildingProfile && (
-                <a
-                  href={`${API_BASE_URL}/download_resume/${finalProfile.pdf_filename}`}
-                  download
-                  className="download-pdf-button"
-                >
-                  📄 Download PDF Resume
-                </a>
-              )}
-            </div>
-
-            {isBuildingProfile && (
-              <div className="processing-indicator">
-                <div className="spinner-large"></div>
-                <p>{statusMessage}</p>
-              </div>
-            )}
-
-            {finalProfile && !isBuildingProfile && (
-              <>
-                <div className="profile-card">
-                  <div className="profile-section">
-                    <h3 className="section-title">Personal Information</h3>
-                    <div className="info-grid">
-                      {finalProfile.name && (
-                        <div className="info-item">
-                          <span className="info-label">Name:</span>
-                          <span className="info-value">{String(finalProfile.name)}</span>
-                        </div>
-                      )}
-                      {finalProfile.role && (
-                        <div className="info-item">
-                          <span className="info-label">Role:</span>
-                          <span className="info-value">{String(finalProfile.role)}</span>
-                        </div>
-                      )}
-                      {finalProfile.email && (
-                        <div className="info-item">
-                          <span className="info-label">Email:</span>
-                          <span className="info-value">{String(finalProfile.email)}</span>
-                        </div>
-                      )}
-                      {finalProfile.phone && (
-                        <div className="info-item">
-                          <span className="info-label">Phone:</span>
-                          <span className="info-value">{String(finalProfile.phone)}</span>
-                        </div>
-                      )}
-                      {finalProfile.location && (
-                        <div className="info-item">
-                          <span className="info-label">Location:</span>
-                          <span className="info-value">{String(finalProfile.location)}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {finalProfile.summary && (
-                    <div className="profile-section">
-                      <h3 className="section-title">Summary</h3>
-                      <p className="section-content">{String(finalProfile.summary)}</p>
-                    </div>
-                  )}
-
-                  {finalProfile.experience_details && (
-                    <div className="profile-section">
-                      <h3 className="section-title">Experience</h3>
-                      {finalProfile.experience_years && (
-                        <p className="experience-years">{String(finalProfile.experience_years)} years</p>
-                      )}
-                      {Array.isArray(finalProfile.experience_details) ? (
-                        finalProfile.experience_details.map((exp, idx) => (
-                          <div key={idx} className="experience-item">
-                            <h4 className="exp-role">{typeof exp === 'object' ? (exp.role || 'Role') : String(exp)}</h4>
-                            {typeof exp === 'object' && (
-                              <>
-                                <p className="exp-company">{String(exp.company || 'Company')} • {String(exp.duration || 'Duration')}</p>
-                                <p className="exp-description">{String(exp.description || '')}</p>
-                              </>
-                            )}
-                          </div>
-                        ))
-                      ) : (
-                        <p className="section-content">{typeof finalProfile.experience_details === 'string' ? finalProfile.experience_details : JSON.stringify(finalProfile.experience_details)}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {finalProfile.skills && (
-                    <div className="profile-section">
-                      <h3 className="section-title">Skills</h3>
-                      <div className="tags-container">
-                        {(Array.isArray(finalProfile.skills)
-                          ? finalProfile.skills
-                          : finalProfile.skills.split(',').map(s => s.trim())
-                        ).map((skill, idx) => (
-                          <span key={idx} className="tag">{typeof skill === 'object' ? JSON.stringify(skill) : String(skill)}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {finalProfile.education && (
-                    <div className="profile-section">
-                      <h3 className="section-title">Education</h3>
-                      {Array.isArray(finalProfile.education) ? (
-                        finalProfile.education.map((edu, idx) => (
-                          <div key={idx} className="education-item">
-                            <h4 className="edu-degree">{typeof edu === 'object' ? (edu.degree || 'Degree') : String(edu)}</h4>
-                            {typeof edu === 'object' && (
-                              <p className="edu-institution">{String(edu.institution || 'Institution')} • {String(edu.year || 'Year')}</p>
-                            )}
-                          </div>
-                        ))
-                      ) : (
-                        <p className="section-content">{typeof finalProfile.education === 'string' ? finalProfile.education : JSON.stringify(finalProfile.education)}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {finalProfile.certifications && (
-                    <div className="profile-section">
-                      <h3 className="section-title">Certifications</h3>
-                      {Array.isArray(finalProfile.certifications) ? (
-                        <ul className="cert-list">
-                          {finalProfile.certifications.map((cert, idx) => (
-                            <li key={idx}>{typeof cert === 'object' ? JSON.stringify(cert) : String(cert)}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="section-content">{typeof finalProfile.certifications === 'string' ? finalProfile.certifications : JSON.stringify(finalProfile.certifications)}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {finalProfile.projects && (
-                    <div className="profile-section">
-                      <h3 className="section-title">Notable Projects</h3>
-                      <p className="section-content">{String(finalProfile.projects)}</p>
-                    </div>
-                  )}
-
-                  {finalProfile.languages && (
-                    <div className="profile-section">
-                      <h3 className="section-title">Languages</h3>
-                      {Array.isArray(finalProfile.languages) ? (
-                        <div className="tags-container">
-                          {finalProfile.languages.map((lang, idx) => (
-                            <span key={idx} className="tag">
-                              {typeof lang === 'object' 
-                                ? `${lang.language || lang.name || 'Language'}${lang.proficiency ? ` (${lang.proficiency})` : ''}` 
-                                : String(lang)
-                              }
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="section-content">{typeof finalProfile.languages === 'string' ? finalProfile.languages : JSON.stringify(finalProfile.languages)}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {finalProfile.links && (
-                    <div className="profile-section">
-                      <h3 className="section-title">Professional Links</h3>
-                      {typeof finalProfile.links === 'object' && !Array.isArray(finalProfile.links) ? (
-                        <div className="links-container">
-                          {Object.entries(finalProfile.links).map(([key, value]) => (
-                            value && (
-                              <div key={key} className="link-item">
-                                <span className="link-label">{String(key)}:</span>
-                                <a href={String(value).startsWith('http') ? String(value) : `https://${String(value)}`} target="_blank" rel="noopener noreferrer" className="link-value">{String(value)}</a>
-                              </div>
-                            )
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="section-content">{typeof finalProfile.links === 'string' ? finalProfile.links : JSON.stringify(finalProfile.links)}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {finalProfile.extras && (
-                    <div className="profile-section">
-                      <h3 className="section-title">Additional Information</h3>
-                      {typeof finalProfile.extras === 'object' && !Array.isArray(finalProfile.extras) ? (
-                        <div className="extras-container">
-                          {Object.entries(finalProfile.extras).map(([key, value]) => (
-                            <div key={key} className="extra-item">
-                              <span className="extra-label">{String(key)}:</span>
-                              <span className="extra-value">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="section-content">{typeof finalProfile.extras === 'string' ? finalProfile.extras : JSON.stringify(finalProfile.extras)}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="profile-actions">
-                  <button className="action-button primary" onClick={downloadProfile}>
-                    <span className="btn-icon">💾</span>
-                    Download JSON
-                  </button>
-                  <button className="action-button secondary" onClick={handleRestart}>
-                    <span className="btn-icon">🔄</span>
-                    Create Another
-                  </button>
-                  <button
-                    className="action-button secondary"
-                    onClick={handleSearchJobs}
-                    disabled={isSearchingJobs}
-                  >
-                    {isSearchingJobs ? 'Searching Jobs...' : '🔍 Find Relevant Jobs'}
-                  </button>
-                </div>
-
-                {/* Job Listings Section */}
-                {showJobs && (
-                  <div className="jobs-section">
-                    <h3 className="section-title">
-                      Relevant Job Openings ({jobs.length})
-                    </h3>
-                    {isSearchingJobs && (
-                      <div className="processing-indicator">
-                        <div className="spinner"></div>
-                        <p>{statusMessage}</p>
-                      </div>
-                    )}
-                    {!isSearchingJobs && jobs.length === 0 && (
-                      <p className="no-jobs">No jobs found matching your profile. Try updating your resume or check back later.</p>
-                    )}
-                    {!isSearchingJobs && jobs.length > 0 && (
-                      <div className="jobs-grid">
-                        {jobs.map((job, index) => (
-                          <div key={index} className="job-card">
-                            <div className="job-header">
-                              <h4 className="job-title">{job.title}</h4>
-                              <span className="job-source">{job.source}</span>
-                            </div>
-                            <div className="job-info">
-                              <p className="job-company">
-                                <span className="job-icon">🏢</span>
-                                {job.company}
-                              </p>
-                              <p className="job-location">
-                                <span className="job-icon">📍</span>
-                                {job.location}
-                              </p>
-                              {job.salary && job.salary !== 'Not specified' && (
-                                <p className="job-salary">
-                                  <span className="job-icon">💰</span>
-                                  {job.salary}
-                                </p>
-                              )}
-                              {job.relevance_score && (
-                                <p className="job-relevance">
-                                  <span className="job-icon">⭐</span>
-                                  Match: {job.relevance_score}/30
-                                </p>
-                              )}
-                            </div>
-                            {job.description && (
-                              <p className="job-description">{job.description}</p>
-                            )}
-                            {job.url && (
-                              <a
-                                href={job.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="apply-button"
-                              >
-                                Apply Now →
-                              </a>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-
-            {error && !isBuildingProfile && (
-              <div className="error-box">
-                <span className="error-icon">⚠️</span>
-                <p>{error}</p>
-                <button className="retry-button" onClick={handleRestart}>
-                  Start Over
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        <footer className="footer">
-          <p>Powered by AI4Bharat & OpenRouter AI • Built with ❤️ for Job Seekers</p>
-        </footer>
-      </div>
+      <Footer />
     </div>
   )
 }
