@@ -56,3 +56,20 @@
 .dark-mode ::-webkit-scrollbar-thumb:hover {
   @apply bg-gray-600;
 }
+
+/* Text Selection Styles */
+::selection {
+  @apply bg-blue-500 text-white;
+}
+
+::-moz-selection {
+  @apply bg-blue-500 text-white;
+}
+
+.dark-mode ::selection {
+  @apply bg-blue-400 text-white;
+}
+
+.dark-mode ::-moz-selection {
+  @apply bg-blue-400 text-white;
+}
