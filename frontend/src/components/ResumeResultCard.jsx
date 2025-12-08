@@ -52,23 +52,69 @@ const ResumeResultCard = ({
         );
     }
 
+    // Helper to render work experience item nicely
+    const renderExperienceItem = (exp, idx) => {
+        const company = exp.company || 'Unknown Company';
+        const role = exp.role || exp.position || 'Role not specified';
+        const duration = exp.duration || exp.years || '';
+        const description = exp.description || '';
+        
+        return (
+            <div key={idx} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 mb-2">
+                <div className="font-semibold text-gray-900 dark:text-white">{role}</div>
+                <div className="text-blue-600 dark:text-blue-400">{company}</div>
+                {duration && <div className="text-sm text-gray-500 dark:text-gray-400">{duration}</div>}
+                {description && <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">{description}</div>}
+            </div>
+        );
+    };
+
     // Helper to render any value nicely
-    const renderValue = (value) => {
+    const renderValue = (value, key) => {
         if (value === null || value === undefined) return <span className="text-gray-400 italic">Not provided</span>;
+        
+        // Special handling for experience_details (work experience)
+        if (key === 'experience_details' && Array.isArray(value)) {
+            if (value.length === 0) return <span className="text-gray-400 italic">None</span>;
+            return <div className="space-y-2">{value.map((exp, idx) => renderExperienceItem(exp, idx))}</div>;
+        }
+        
+        // Handle single experience object
+        if (key === 'experience_details' && typeof value === 'object') {
+            return renderExperienceItem(value, 0);
+        }
+        
         if (Array.isArray(value)) {
             if (value.length === 0) return <span className="text-gray-400 italic">None</span>;
             return (
                 <ul className="list-disc list-inside space-y-1">
                     {value.map((item, idx) => (
                         <li key={idx} className="text-gray-700 dark:text-gray-300">
-                            {typeof item === 'object' ? JSON.stringify(item) : String(item)}
+                            {typeof item === 'object' ? (
+                                // For other object arrays, show key-value pairs
+                                Object.entries(item)
+                                    .filter(([k, v]) => v !== null && v !== undefined)
+                                    .map(([k, v]) => `${k}: ${v}`)
+                                    .join(' • ')
+                            ) : String(item)}
                         </li>
                     ))}
                 </ul>
             );
         }
         if (typeof value === 'object') {
-            return <pre className="text-sm bg-gray-100 dark:bg-gray-700 p-2 rounded overflow-x-auto">{JSON.stringify(value, null, 2)}</pre>;
+            // Display objects as formatted key-value pairs
+            const entries = Object.entries(value).filter(([k, v]) => v !== null && v !== undefined);
+            if (entries.length === 0) return <span className="text-gray-400 italic">Not provided</span>;
+            return (
+                <div className="space-y-1">
+                    {entries.map(([k, v]) => (
+                        <div key={k} className="text-gray-700 dark:text-gray-300">
+                            <span className="font-medium capitalize">{k.replace(/_/g, ' ')}:</span> {String(v)}
+                        </div>
+                    ))}
+                </div>
+            );
         }
         return <span className="text-gray-800 dark:text-gray-200">{String(value)}</span>;
     };
@@ -175,22 +221,13 @@ const ResumeResultCard = ({
                                         {label}
                                     </div>
                                     <div className="text-gray-800 dark:text-gray-200">
-                                        {renderValue(value)}
+                                        {renderValue(value, key)}
                                     </div>
                                 </div>
                             );
                         })}
                     </div>
 
-                    {/* Raw JSON Toggle */}
-                    <details className="mt-6 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                        <summary className="cursor-pointer p-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
-                            🔍 View Raw JSON Data
-                        </summary>
-                        <pre className="p-4 text-xs overflow-x-auto text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-b-lg">
-                            {JSON.stringify(profile, null, 2)}
-                        </pre>
-                    </details>
                 </div>
 
                 {/* Actions */}
