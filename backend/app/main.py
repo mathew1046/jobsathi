@@ -60,19 +60,18 @@ os.makedirs(DATABASE_DIR, exist_ok=True)
 # Configure Gemini
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Configuration for Gemini
+# Configuration for Gemma (text-only, JSON-friendly)
 GENERATION_CONFIG = {
-    "temperature": 0.7,
-    "top_p": 0.95,
-    "top_k": 64,
-    "max_output_tokens": 8192,
-    "response_mime_type": "application/json",
+    "temperature": 0.6,
+    "top_p": 0.9,
+    "top_k": 40,
+    "max_output_tokens": 4096,
 }
 
 # Initialize the model
-# Using gemini-1.5-flash as it is fast and cost-effective
+# Switched to gemma-3-27b-it to avoid 429s on flash endpoints
 model = genai.GenerativeModel(
-    model_name="gemini-2.5-flash-lite",
+    model_name="gemma-3-27b-it",
     generation_config=GENERATION_CONFIG,
 )
 
@@ -564,7 +563,7 @@ Return ONLY valid JSON. No explanations, no markdown, no extra text."""
     }
 
 def generate_ats_resume_pdf(profile: Dict[str, Any], output_path: str):
-    """Generate an ATS-friendly PDF resume from profile data."""
+    """Generate an ATS-friendly PDF resume from profile data - optimized for blue-collar workers."""
     doc = SimpleDocTemplate(output_path, pagesize=letter,
                            rightMargin=0.75*inch, leftMargin=0.75*inch,
                            topMargin=0.75*inch, bottomMargin=0.75*inch)
@@ -601,9 +600,17 @@ def generate_ats_resume_pdf(profile: Dict[str, Any], output_path: str):
     normal_style.fontSize = 10
     normal_style.leading = 14
     
-    # Name and Contact
+    contact_style = ParagraphStyle('Contact', parent=normal_style, alignment=TA_CENTER, fontSize=9)
+    
+    # Name and Role Header
     name = str(profile.get('name', 'Candidate Name'))
     story.append(Paragraph(name.upper(), title_style))
+    
+    # Desired Role (if specified)
+    role = profile.get('role')
+    if role:
+        role_style = ParagraphStyle('Role', parent=normal_style, alignment=TA_CENTER, fontSize=11, textColor=colors.HexColor('#2c3e50'))
+        story.append(Paragraph(str(role), role_style))
     story.append(Spacer(1, 0.1*inch))
     
     # Contact information
@@ -617,22 +624,8 @@ def generate_ats_resume_pdf(profile: Dict[str, Any], output_path: str):
     
     if contact_parts:
         contact_text = ' | '.join(contact_parts)
-        contact_style = ParagraphStyle('Contact', parent=normal_style, alignment=TA_CENTER, fontSize=9)
         story.append(Paragraph(contact_text, contact_style))
         story.append(Spacer(1, 0.15*inch))
-    
-    # Links
-    links = profile.get('links', {})
-    if links and isinstance(links, dict):
-        link_parts = []
-        if links.get('linkedin'):
-            link_parts.append(f"LinkedIn: {str(links['linkedin'])}")
-        if links.get('github'):
-            link_parts.append(f"GitHub: {str(links['github'])}")
-        if link_parts:
-            link_text = ' | '.join(link_parts)
-            story.append(Paragraph(link_text, contact_style))
-            story.append(Spacer(1, 0.15*inch))
     
     # Professional Summary
     summary = profile.get('summary', '')
@@ -641,26 +634,63 @@ def generate_ats_resume_pdf(profile: Dict[str, Any], output_path: str):
         story.append(Paragraph(str(summary), normal_style))
         story.append(Spacer(1, 0.1*inch))
     
-    # Skills
+    # Key Availability Info (important for blue-collar jobs)
+    availability_parts = []
+    if profile.get('shift_availability'):
+        availability_parts.append(f"Shift: {profile['shift_availability']}")
+    if profile.get('start_date'):
+        availability_parts.append(f"Can Start: {profile['start_date']}")
+    if profile.get('work_type_preference'):
+        availability_parts.append(f"Preference: {profile['work_type_preference']}")
+    if profile.get('transportation'):
+        availability_parts.append(f"Transport: {profile['transportation']}")
+    
+    if availability_parts:
+        story.append(Paragraph('AVAILABILITY & PREFERENCES', heading_style))
+        avail_text = ' | '.join(availability_parts)
+        story.append(Paragraph(avail_text, normal_style))
+        story.append(Spacer(1, 0.1*inch))
+    
+    # Skills & Equipment
     skills = profile.get('skills', [])
+    machines = profile.get('machines_operated', [])
+    
     if skills and isinstance(skills, list):
         story.append(Paragraph('SKILLS', heading_style))
         skills_text = ' • '.join([str(s) for s in skills if s]) if skills else 'N/A'
         story.append(Paragraph(skills_text, normal_style))
         story.append(Spacer(1, 0.1*inch))
     
+    if machines and isinstance(machines, list) and len(machines) > 0:
+        story.append(Paragraph('MACHINES/VEHICLES OPERATED', heading_style))
+        machines_text = ' • '.join([str(m) for m in machines if m])
+        story.append(Paragraph(machines_text, normal_style))
+        story.append(Spacer(1, 0.1*inch))
+    
+    # Physical Capabilities (important for blue-collar)
+    physical = profile.get('physical_capabilities')
+    if physical:
+        story.append(Paragraph('PHYSICAL CAPABILITIES', heading_style))
+        story.append(Paragraph(str(physical), normal_style))
+        story.append(Spacer(1, 0.1*inch))
+    
     # Experience
     experience_details = profile.get('experience_details', [])
+    experience_years = profile.get('experience_years')
+    
     if experience_details and isinstance(experience_details, list):
-        story.append(Paragraph('PROFESSIONAL EXPERIENCE', heading_style))
+        exp_title = 'WORK EXPERIENCE'
+        if experience_years:
+            exp_title += f' ({experience_years} years total)'
+        story.append(Paragraph(exp_title, heading_style))
         for exp in experience_details:
             if isinstance(exp, dict):
                 company = str(exp.get('company', 'Company'))
-                role = str(exp.get('role', 'Role'))
+                exp_role = str(exp.get('role', 'Role'))
                 duration = str(exp.get('duration', '')) if exp.get('duration') else ''
                 description = str(exp.get('description', '')) if exp.get('description') else ''
                 
-                exp_header = f"<b>{role}</b> - {company}"
+                exp_header = f"<b>{exp_role}</b> - {company}"
                 if duration:
                     exp_header += f" ({duration})"
                 story.append(Paragraph(exp_header, normal_style))
@@ -668,6 +698,9 @@ def generate_ats_resume_pdf(profile: Dict[str, Any], output_path: str):
                 if description:
                     story.append(Paragraph(f"• {description}", normal_style))
                 story.append(Spacer(1, 0.08*inch))
+            elif isinstance(exp, str):
+                story.append(Paragraph(f"• {exp}", normal_style))
+        story.append(Spacer(1, 0.1*inch))
     
     # Education
     education = profile.get('education', [])
@@ -684,11 +717,14 @@ def generate_ats_resume_pdf(profile: Dict[str, Any], output_path: str):
                     edu_text += f" ({year})"
                 story.append(Paragraph(edu_text, normal_style))
                 story.append(Spacer(1, 0.08*inch))
+            elif isinstance(edu, str):
+                story.append(Paragraph(f"• {edu}", normal_style))
+        story.append(Spacer(1, 0.1*inch))
     
     # Certifications
     certifications = profile.get('certifications', [])
-    if certifications and isinstance(certifications, list) and certifications:
-        story.append(Paragraph('CERTIFICATIONS', heading_style))
+    if certifications and isinstance(certifications, list) and len(certifications) > 0:
+        story.append(Paragraph('CERTIFICATIONS & TRAINING', heading_style))
         for cert in certifications:
             if cert:
                 story.append(Paragraph(f"• {str(cert)}", normal_style))
@@ -696,10 +732,36 @@ def generate_ats_resume_pdf(profile: Dict[str, Any], output_path: str):
     
     # Languages
     languages = profile.get('languages', [])
-    if languages and isinstance(languages, list):
+    if languages and isinstance(languages, list) and len(languages) > 0:
         story.append(Paragraph('LANGUAGES', heading_style))
-        lang_text = ', '.join([str(lang) for lang in languages if lang]) if languages else 'N/A'
+        lang_text = ', '.join([str(lang) for lang in languages if lang])
         story.append(Paragraph(lang_text, normal_style))
+        story.append(Spacer(1, 0.1*inch))
+    
+    # Work Authorization
+    work_auth = profile.get('work_authorization')
+    if work_auth:
+        story.append(Paragraph('WORK AUTHORIZATION', heading_style))
+        story.append(Paragraph(str(work_auth), normal_style))
+        story.append(Spacer(1, 0.1*inch))
+    
+    # References (if provided)
+    referrals = profile.get('referrals', [])
+    if referrals and isinstance(referrals, list) and len(referrals) > 0:
+        story.append(Paragraph('REFERENCES', heading_style))
+        for ref in referrals:
+            if isinstance(ref, dict):
+                ref_name = ref.get('name', '')
+                ref_contact = ref.get('contact', ref.get('phone', ''))
+                ref_relation = ref.get('relation', '')
+                ref_text = f"• {ref_name}"
+                if ref_relation:
+                    ref_text += f" ({ref_relation})"
+                if ref_contact:
+                    ref_text += f" - {ref_contact}"
+                story.append(Paragraph(ref_text, normal_style))
+            elif isinstance(ref, str):
+                story.append(Paragraph(f"• {ref}", normal_style))
     
     # Build PDF
     doc.build(story)
@@ -733,13 +795,13 @@ async def build_profile(payload: Dict[str, Any] = Body(...)):
     # Join all responses into a single English text
     full_english_text = "\n\n".join(english_responses)
     
-    # Create ATS-optimized resume using LLM
+    # Create ATS-optimized resume using LLM - includes ALL 20 question fields for blue-collar workers
     prompt = f"""Here is a complete interview transcript in English from a job seeker:
 
 {full_english_text}
 
 TASK:
-Extract information strictly from the provided English text and convert it into a structured JSON resume.
+Extract ALL information from the provided English text and convert it into a structured JSON resume. This is for blue-collar workers in India.
 
 ABSOLUTE RULES (must NEVER be broken):
 - Do NOT create, guess, or invent any information.
@@ -750,9 +812,9 @@ ABSOLUTE RULES (must NEVER be broken):
 
 ALLOWED ACTIONS:
 - Copy all information exactly as written in the source text.
-- Standardize skill-like phrases into globally recognized skill names (e.g., “i drive cars” → "driver").
-- Convert all number words into numeric digits (e.g., “five” → 5).
-- Do not add extra text, summaries, or interpretations.
+- Standardize skill-like phrases into globally recognized skill names (e.g., "i drive cars" -> "Two Wheeler Driving", "i can lift heavy" -> "Physical Labor").
+- Convert all number words into numeric digits (e.g., "five" -> 5).
+- Normalize job titles for blue-collar roles (e.g., "delivery boy" -> "Delivery Executive", "driver" -> "Professional Driver").
 
 OUTPUT FORMAT (fill ONLY fields present in the text; everything else stays null/empty):
 
@@ -762,20 +824,50 @@ OUTPUT FORMAT (fill ONLY fields present in the text; everything else stays null/
   "email": null,
   "phone": null,
   "location": null,
-  "links": {{}},
-  "summary": null,
+  "work_authorization": null,
+  "machines_operated": [],
+  "certifications": [],
+  "shift_availability": null,
+  "start_date": null,
+  "transportation": null,
+  "physical_capabilities": null,
   "experience_years": null,
   "experience_details": [],
-  "skills": [],
-  "education": [],
-  "certifications": [],
   "languages": [],
+  "work_type_preference": null,
+  "skills": [],
+  "referrals": [],
+  "education": [],
+  "summary": null,
+  "links": {{}},
   "extras": {{}}
 }}
 
+FIELD DEFINITIONS:
+- name: Full name of the candidate
+- role: Desired job title/role
+- email: Email address
+- phone: Phone number (digits only)
+- location: City, area, or state where they want to work
+- work_authorization: Citizen, visa type, or work permit status
+- machines_operated: List of machines/vehicles they can operate (bikes, trucks, forklifts, cutting machines, etc.)
+- certifications: Training certificates or course completions
+- shift_availability: Day shift, night shift, weekend, rotating, etc.
+- start_date: When they can start (immediately, 2 weeks, specific date)
+- transportation: How they commute (own bike, public transport, company vehicle, etc.)
+- physical_capabilities: Ability to do physical work (can lift 50kg, can stand 8 hours, etc.)
+- experience_years: Total years of work experience (numeric)
+- experience_details: Array of past jobs with {{company, role, duration, description}}
+- languages: Languages they speak with proficiency
+- work_type_preference: Full-time, part-time, contract, gig work
+- skills: Technical and soft skills relevant to blue-collar work
+- referrals: References with contact info if provided
+- education: Array with {{degree, institution, year}}
+- summary: Brief work summary as stated by the candidate
+
 NOTES:
 - If the user doesn't provide a value, leave the field null/empty.
-- Skill normalization is allowed, but no new skills should be added.
+- Skill normalization is allowed for blue-collar context.
 - Number words must always be converted to digits.
 - No assumptions. No hallucinations. No invented data.
 """
@@ -798,16 +890,18 @@ NOTES:
     # Save session data and generate PDF
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        name = cleaned_result.get("name", "unknown").replace(" ", "_").replace("/", "_")
+        raw_name = cleaned_result.get("name")
+        safe_name = str(raw_name or "unknown")
+        safe_name = safe_name.replace(" ", "_").replace("/", "_")
         
         # Save complete session JSON
-        json_filename = os.path.join(DATABASE_DIR, f"session_{timestamp}_{name}.json")
+        json_filename = os.path.join(DATABASE_DIR, f"session_{timestamp}_{safe_name}.json")
         with open(json_filename, "w", encoding="utf-8") as f:
             json.dump(session_data, f, indent=2, ensure_ascii=False)
         print(f"Saved session data to {json_filename}")
         
         # Generate PDF resume
-        pdf_filename = os.path.join(DATABASE_DIR, f"resume_{timestamp}_{name}.pdf")
+        pdf_filename = os.path.join(DATABASE_DIR, f"resume_{timestamp}_{safe_name}.pdf")
         generate_ats_resume_pdf(cleaned_result, pdf_filename)
         print(f"Generated PDF resume: {pdf_filename}")
         
@@ -822,7 +916,7 @@ NOTES:
     return {
         "status": "success",
         "profile": cleaned_result,
-        "pdf_filename": f"resume_{timestamp}_{name}.pdf"
+        "pdf_filename": f"resume_{timestamp}_{safe_name}.pdf"
     }
 
 @app.get("/download_resume/{filename}")

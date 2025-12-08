@@ -620,6 +620,10 @@ const App = () => {
                 statusMessage={statusMessage}
                 onRestart={handleRestart}
                 apiBaseUrl={API_BASE_URL}
+                onSearchJobs={handleSearchJobs}
+                isSearchingJobs={isSearchingJobs}
+                jobs={jobs}
+                showJobs={showJobs}
                 t={t}
               />
             )}
