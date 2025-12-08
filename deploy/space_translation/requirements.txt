@@ -1,0 +1,9 @@
+
+fastapi
+uvicorn
+torch
+transformers
+scipy
+sentencepiece
+sacremoses
+git+https://github.com/AI4Bharat/IndicTransToolkit.git

@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react'
 import './AudioRecorder.css'
 
-const AudioRecorder = ({ onRecordingComplete, onRecordStart, disabled = false }) => {
+const AudioRecorder = ({ onRecordingComplete, onRecordStart, disabled = false, t }) => {
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [audioURL, setAudioURL] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
+  
+  const _t = t || ((k) => k);
   
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
@@ -241,7 +243,7 @@ const AudioRecorder = ({ onRecordingComplete, onRecordStart, disabled = false })
           disabled={disabled}
         >
           <span className="mic-icon">🎤</span>
-          <span>Start Recording</span>
+          <span>{_t("recording_start")}</span>
         </button>
       ) : isRecording ? (
         <div className="recording-controls">
@@ -260,7 +262,7 @@ const AudioRecorder = ({ onRecordingComplete, onRecordStart, disabled = false })
             onClick={stopRecording}
           >
             <span className="stop-icon">⬛</span>
-            <span>Stop Recording</span>
+            <span>{_t("recording_stop")}</span>
           </button>
         </div>
       ) : (
@@ -278,7 +280,7 @@ const AudioRecorder = ({ onRecordingComplete, onRecordStart, disabled = false })
               {isPlaying ? '⏸️' : '▶️'}
             </button>
             <span className="player-label">
-              {isPlaying ? 'Playing...' : 'Ready to submit'}
+              {isPlaying ? _t("playing_status") : _t("ready_submit")}
             </span>
           </div>
           <div className="action-buttons">
@@ -286,13 +288,13 @@ const AudioRecorder = ({ onRecordingComplete, onRecordStart, disabled = false })
               className="record-button rerecord"
               onClick={handleReRecord}
             >
-              <span>🔄 Re-record</span>
+              <span>🔄 {_t("rerecord")}</span>
             </button>
             <button
               className="record-button submit"
               onClick={handleSubmitRecording}
             >
-              <span>✓ Submit Recording</span>
+              <span>✓ {_t("submit_recording")}</span>
             </button>
           </div>
         </div>

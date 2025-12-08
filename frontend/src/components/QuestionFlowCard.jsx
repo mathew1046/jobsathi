@@ -12,9 +12,11 @@ const QuestionFlowCard = ({
     textControl, // { textAnswer, setTextAnswer, onSubmit }
     onSkip,
     onRestart,
-    error
+    error,
+    t
 }) => {
     const progress = ((currentIndex + 1) / totalQuestions) * 100;
+    const _t = t || ((k) => k);
 
     return (
         <div className="flex justify-center w-full px-4">
@@ -28,7 +30,7 @@ const QuestionFlowCard = ({
                 <div className="bg-gray-50 dark:bg-slate-800/50 px-8 py-6 border-b border-gray-100 dark:border-gray-700">
                     <div className="flex justify-between items-center mb-4">
                         <span className="text-sm font-semibold tracking-wider text-gray-500 dark:text-gray-400 uppercase">
-                            Building Your Resume
+                            {_t("building_resume")}
                         </span>
                         <span className="text-sm font-bold text-saas-blue dark:text-blue-400">
                             Q{currentIndex + 1} <span className="text-gray-400 font-normal">/ {totalQuestions}</span>
@@ -70,10 +72,10 @@ const QuestionFlowCard = ({
                             >
                                 {audioControl.isPlaying ? (
                                     <>
-                                        <span className="animate-pulse">🔊</span> Playing
+                                        <span className="animate-pulse">🔊</span> {_t("playing")}
                                     </>
                                 ) : (
-                                    <>▶️ Listen</>
+                                    <>▶️ {_t("listen")}</>
                                 )}
                             </button>
                             <button
@@ -81,7 +83,7 @@ const QuestionFlowCard = ({
                                 className="p-1.5 text-gray-500 hover:text-saas-blue transition-colors"
                                 title="Replay"
                             >
-                                Start Over ↺
+                                {_t("replay")} ↺
                             </button>
                         </div>
                     )}
@@ -91,7 +93,7 @@ const QuestionFlowCard = ({
                         <div className="relative flex items-center py-2">
                             <div className="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
                             <span className="flex-shrink-0 mx-4 text-gray-400 text-sm font-medium uppercase tracking-widest">
-                                Answer With Voice
+                                {_t("answer_voice")}
                             </span>
                             <div className="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
                         </div>
@@ -99,9 +101,11 @@ const QuestionFlowCard = ({
                         {/* Recorder Component */}
                         <div className="flex justify-center">
                             <AudioRecorder
+                                key={currentQuestion.id}
                                 onRecordingComplete={recordingControl.onRecordingComplete}
                                 onRecordStart={recordingControl.onRecordStart}
                                 disabled={recordingControl.isProcessing}
+                                t={t}
                             />
                         </div>
 
@@ -109,7 +113,7 @@ const QuestionFlowCard = ({
                         <div className="relative flex items-center py-2">
                             <div className="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
                             <span className="flex-shrink-0 mx-4 text-gray-400 text-sm font-medium uppercase tracking-widest">
-                                Or Type Answer
+                                {_t("answer_text")}
                             </span>
                             <div className="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
                         </div>
@@ -120,7 +124,7 @@ const QuestionFlowCard = ({
                                 value={textControl.textAnswer}
                                 onChange={(e) => textControl.setTextAnswer(e.target.value)}
                                 disabled={recordingControl.isProcessing}
-                                placeholder="Type your answer here..."
+                                placeholder={_t("type_answer")}
                                 rows={4}
                                 className="w-full p-4 pl-12 rounded-xl bg-gray-50 dark:bg-slate-900 border-2 border-transparent focus:border-saas-blue focus:bg-white dark:focus:bg-slate-800 transition-all outline-none resize-none text-gray-900 dark:text-white placeholder-gray-400"
                             />
@@ -134,14 +138,14 @@ const QuestionFlowCard = ({
                                 disabled={recordingControl.isProcessing || !textControl.textAnswer.trim()}
                                 className="flex-1 bg-saas-blue text-white font-bold py-3.5 px-6 rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                             >
-                                Submit Written Answer
+                                {_t("submit")}
                             </button>
                             <button
                                 onClick={onSkip}
                                 disabled={recordingControl.isProcessing}
                                 className="px-6 py-3.5 rounded-xl font-semibold text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
                             >
-                                Skip <SkipForward className="w-4 h-4" />
+                                {_t("skip_question")} <SkipForward className="w-4 h-4" />
                             </button>
                         </div>
                     </div>
@@ -185,7 +189,7 @@ const QuestionFlowCard = ({
                             className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
                             disabled={recordingControl.isProcessing}
                         >
-                            Start Over
+                            {_t("restart")}
                         </button>
                     </div>
 

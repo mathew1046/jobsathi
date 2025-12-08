@@ -7,8 +7,11 @@ const ResumeResultCard = ({
     isBuilding,
     statusMessage,
     onRestart,
-    apiBaseUrl
+    apiBaseUrl,
+    t
 }) => {
+    const _t = t || ((k) => k);
+
     // Loading State
     if (isBuilding || !profile) {
         return (
@@ -22,8 +25,8 @@ const ResumeResultCard = ({
                         <div className="absolute inset-0 border-4 border-gray-100 dark:border-gray-700 rounded-full"></div>
                         <div className="absolute inset-0 border-4 border-saas-blue rounded-full border-t-transparent animate-spin"></div>
                     </div>
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Creating Your Resume</h3>
-                    <p className="text-gray-500 dark:text-gray-400 animate-pulse">{statusMessage || "Processing details..."}</p>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{_t("creating_resume")}</h3>
+                    <p className="text-gray-500 dark:text-gray-400 animate-pulse">{statusMessage || _t("processing_details")}</p>
                 </motion.div>
             </div>
         );
@@ -63,10 +66,10 @@ const ResumeResultCard = ({
                 <div className="bg-gray-50 dark:bg-slate-800/80 px-8 py-8 md:px-12 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row justify-between items-center gap-6">
                     <div>
                         <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                            Your ATS-Optimized Resume
+                            {_t("resume_title")}
                         </h2>
                         <p className="text-gray-500 dark:text-gray-400">
-                            Ready for download in standard JSON/PDF formats.
+                            {_t("resume_subtitle")}
                         </p>
                     </div>
 
@@ -78,7 +81,7 @@ const ResumeResultCard = ({
                             download
                             className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-green-600/20 transition-all"
                         >
-                            <Download className="w-5 h-5" /> Download PDF
+                            <Download className="w-5 h-5" /> {_t("download_pdf")}
                         </motion.a>
                     )}
                 </div>
@@ -90,31 +93,31 @@ const ResumeResultCard = ({
                     <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-gray-700">
                             <div className="flex items-center gap-2 mb-1 text-saas-blue dark:text-blue-400">
-                                <User className="w-4 h-4" /> <span className="text-xs font-bold uppercase tracking-wider">Name</span>
+                                <User className="w-4 h-4" /> <span className="text-xs font-bold uppercase tracking-wider">{_t("label_name")}</span>
                             </div>
                             <div className="font-semibold text-gray-900 dark:text-white">{profile.name || "N/A"}</div>
                         </div>
                         <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-gray-700">
                             <div className="flex items-center gap-2 mb-1 text-saas-blue dark:text-blue-400">
-                                <Briefcase className="w-4 h-4" /> <span className="text-xs font-bold uppercase tracking-wider">Role</span>
+                                <Briefcase className="w-4 h-4" /> <span className="text-xs font-bold uppercase tracking-wider">{_t("label_role")}</span>
                             </div>
                             <div className="font-semibold text-gray-900 dark:text-white">{profile.role || "N/A"}</div>
                         </div>
                         <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-gray-700">
                             <div className="flex items-center gap-2 mb-1 text-saas-blue dark:text-blue-400">
-                                <Mail className="w-4 h-4" /> <span className="text-xs font-bold uppercase tracking-wider">Email</span>
+                                <Mail className="w-4 h-4" /> <span className="text-xs font-bold uppercase tracking-wider">{_t("label_email")}</span>
                             </div>
                             <div className="font-semibold text-gray-900 dark:text-white truncate" title={profile.email}>{profile.email || "N/A"}</div>
                         </div>
                         <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-gray-700">
                             <div className="flex items-center gap-2 mb-1 text-saas-blue dark:text-blue-400">
-                                <Phone className="w-4 h-4" /> <span className="text-xs font-bold uppercase tracking-wider">Phone</span>
+                                <Phone className="w-4 h-4" /> <span className="text-xs font-bold uppercase tracking-wider">{_t("label_phone")}</span>
                             </div>
                             <div className="font-semibold text-gray-900 dark:text-white">{profile.phone || "N/A"}</div>
                         </div>
                         <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-gray-700 md:col-span-2 lg:col-span-1">
                             <div className="flex items-center gap-2 mb-1 text-saas-blue dark:text-blue-400">
-                                <MapPin className="w-4 h-4" /> <span className="text-xs font-bold uppercase tracking-wider">Location</span>
+                                <MapPin className="w-4 h-4" /> <span className="text-xs font-bold uppercase tracking-wider">{_t("label_location")}</span>
                             </div>
                             <div className="font-semibold text-gray-900 dark:text-white">{profile.location || "N/A"}</div>
                         </div>
@@ -125,7 +128,7 @@ const ResumeResultCard = ({
                         <motion.div variants={itemVariants}>
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                 <span className="w-1 h-6 bg-saas-blue rounded-full"></span>
-                                Professional Summary
+                                {_t("section_summary")}
                             </h3>
                             <div className="bg-gray-50 dark:bg-slate-800/50 p-6 rounded-2xl text-gray-700 dark:text-gray-300 leading-relaxed">
                                 {profile.summary}
@@ -138,7 +141,7 @@ const ResumeResultCard = ({
                         <motion.div variants={itemVariants}>
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                 <span className="w-1 h-6 bg-saas-blue rounded-full"></span>
-                                key Skills
+                                {_t("section_skills")}
                             </h3>
                             <div className="flex flex-wrap gap-2">
                                 {renderList(profile.skills).map((skill, idx) => (
@@ -160,11 +163,11 @@ const ResumeResultCard = ({
                             <div className="flex justify-between items-center mb-6">
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                     <span className="w-1 h-6 bg-saas-blue rounded-full"></span>
-                                    Experience
+                                    {_t("section_experience")}
                                 </h3>
                                 {profile.experience_years && (
                                     <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-3 py-1 rounded-full text-sm font-medium">
-                                        {profile.experience_years} Years Total
+                                        {profile.experience_years} {_t("years_total")}
                                     </span>
                                 )}
                             </div>
@@ -199,7 +202,7 @@ const ResumeResultCard = ({
                         <motion.div variants={itemVariants}>
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
                                 <span className="w-1 h-6 bg-saas-blue rounded-full"></span>
-                                Education
+                                {_t("section_education")}
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {renderList(profile.education).map((edu, idx) => (
@@ -229,7 +232,7 @@ const ResumeResultCard = ({
                         <motion.div variants={itemVariants}>
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                 <span className="w-1 h-6 bg-saas-blue rounded-full"></span>
-                                Certifications
+                                {_t("section_certifications")}
                             </h3>
                             <div className="bg-gray-50 dark:bg-slate-800 rounded-xl p-6">
                                 <ul className="space-y-3">
@@ -250,7 +253,7 @@ const ResumeResultCard = ({
                             onClick={onRestart}
                             className="flex items-center gap-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors font-medium px-4 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800"
                         >
-                            <RefreshCw className="w-4 h-4" /> Start A New Resume
+                            <RefreshCw className="w-4 h-4" /> {_t("start_new_resume")}
                         </button>
                     </motion.div>
 

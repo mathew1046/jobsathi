@@ -4,6 +4,7 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 import tempfile
 import os
 import asyncio
@@ -22,8 +23,11 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
-from job_search import search_jobs
+from app.job_search import search_jobs
 from dotenv import load_dotenv
+from app.services.translation_service import translate_text, translate_ui_elements
+from app.services.tts_service import generate_audio
+from fastapi.responses import Response
 
 # Load environment variables
 load_dotenv()
@@ -83,12 +87,18 @@ session_storage = {}
 
 # Language maps
 LANGUAGE_NAME = {
-    "as": "Assamese", "awa": "Awadhi", "bn": "Bengali", "bho": "Bhojpuri",
-    "brx": "Bodo", "doi": "Dogri", "en": "English", "gom": "Goan Konkani",
-    "gu": "Gujarati", "hi": "Hindi", "kn": "Kannada", "kas": "Kashmiri",
-    "mai": "Maithili", "ml": "Malayalam", "mr": "Marathi", "mni": "Manipuri",
-    "nep": "Nepali", "or": "Odia", "pa": "Punjabi", "sa": "Sanskrit",
-    "sat": "Santali", "snd": "Sindhi", "te": "Telugu", "ta": "Tamil", "ur": "Urdu"
+    "as": "অসমীয়া", 
+    "bn": "বাংলা", 
+    "gu": "ગુજરાતી", 
+    "hi": "हिन्दी", 
+    "kn": "ಕನ್ನಡ", 
+    "ml": "മലയാളം", 
+    "mr": "मराठी", 
+    "or": "ଓଡ଼ିଆ", 
+    "pa": "ਪੰਜਾਬੀ", 
+    "ta": "தமிழ்", 
+    "te": "తెలుగు", 
+    "en": "English"
 }
 
 # -----------------------
@@ -207,6 +217,50 @@ async def transcribe(audio: UploadFile = File(...), source_language: str = Form(
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
             print(f"Temp file removed: {tmp_path}")
+
+class UITranslationRequest(BaseModel):
+    language: str
+    elements: Dict[str, str]
+
+@app.post("/ui-translations")
+async def get_ui_translations(request: UITranslationRequest):
+    """
+    Translate UI elements to the target language.
+    """
+    try:
+        translated = await translate_ui_elements(request.elements, request.language)
+        return {"translations": translated}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/get-question-audio")
+async def get_question_audio(text: str, language: str = "en"):
+    """
+    Generate audio for a question using TTS service.
+
+    The frontend already sends text in the target language. We attempt TTS with that
+    first, then fall back to translating from English if needed. This avoids double
+    translation while keeping a fallback path when the TTS model fails on the
+    provided text.
+    """
+    try:
+        target_lang = language or "en"
+
+        # 1) First attempt: use text as-is (already localized on the frontend)
+        audio_bytes = await generate_audio(text, target_lang)
+
+        # 2) Fallback: if empty/failed and not English, try translating from English
+        if not audio_bytes and target_lang != "en":
+            translated_text = await translate_text(text, "en", target_lang)
+            audio_bytes = await generate_audio(translated_text, target_lang)
+
+        if not audio_bytes:
+            raise HTTPException(status_code=500, detail="TTS generation failed")
+
+        return Response(content=audio_bytes, media_type="audio/wav")
+    except Exception as e:
+        print(f"Error in get_question_audio: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # -----------------------
 # LLM Integration

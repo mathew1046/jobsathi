@@ -2,7 +2,8 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 
-const LanguageSelector = ({ selectedLanguage, setSelectedLanguage, languages }) => {
+const LanguageSelector = ({ selectedLanguage, setSelectedLanguage, languages, t }) => {
+    const _t = t || ((k) => k);
     return (
         <div className="flex items-center justify-center p-4">
             <motion.div
@@ -13,7 +14,7 @@ const LanguageSelector = ({ selectedLanguage, setSelectedLanguage, languages }) 
             >
                 {/* Header Strip */}
                 <div className="bg-saas-blue dark:bg-blue-600 px-6 py-4">
-                    <h3 className="text-white font-bold text-lg text-center">Language Selection</h3>
+                    <h3 className="text-white font-bold text-lg text-center">{_t("language_selection")}</h3>
                 </div>
 
                 {/* Card Content */}
@@ -36,7 +37,7 @@ const LanguageSelector = ({ selectedLanguage, setSelectedLanguage, languages }) 
                     </div>
 
                     <p className="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                        Select the language you are most comfortable speaking.
+                        {_t("language_selection_help")}
                     </p>
                 </div>
             </motion.div>

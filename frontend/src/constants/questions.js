@@ -3,120 +3,120 @@ export const RESUME_QUESTIONS = [
     id: 1,
     question: "What is your full name?",
     field: "name",
-    prompt: "Please state your full name clearly."
+    prompt: "Say your full name slowly."
   },
   {
     id: 2,
-    question: "What is your contact phone number?",
+    question: "What is your phone number?",
     field: "phone",
-    prompt: "Please provide your contact phone number."
+    prompt: "Say the phone number digit by digit."
   },
   {
     id: 3,
-    question: "What is your current location or preferred work location?",
+    question: "Where do you live? Or where do you want to work?",
     field: "location",
-    prompt: "Share your current city/location or where you'd like to work."
+    prompt: "Tell your city and state, or the place you want a job."
   },
   {
     id: 4,
-    question: "What is your work authorization or visa status?",
+    question: "Are you allowed to work here?",
     field: "work_authorization",
-    prompt: "Specify your legal right to work (citizen, permanent resident, visa type, etc.)."
+    prompt: "Say citizen, PR, or your visa type (for example, worker visa)."
   },
   {
     id: 5,
-    question: "Do you know how to operate any machines or vehicles?",
+    question: "Can you use any machines or drive any vehicles?",
     field: "machines_operated",
-    prompt: "Tell me if you can operate any machines or vehicles. For example: scooter, car, truck, sewing machine, oven, forklifts, cutting machine, etc."
+    prompt: "Name what you can use: scooter, car, truck, forklift, cutting machine, etc."
   },
   {
     id: 6,
-    question: "Do you have any professional certifications?",
+    question: "Do you have any certificates from courses or training?",
     field: "certifications",
-    prompt: "Share any relevant certifications, courses, or professional qualifications you've earned."
+    prompt: "Tell any course or training certificate you got."
   },
   {
     id: 7,
-    question: "Which shifts are you available to work?",
+    question: "When can you work? (day/night/weekend)",
     field: "shift_availability",
-    prompt: "Select your availability: day, night, weekend, rotating shifts."
+    prompt: "Say day shift, night shift, weekends, or rotating."
   },
   {
     id: 8,
-    question: "What is your earliest possible start date?",
+    question: "When can you start working?",
     field: "start_date",
     prompt: "Indicate when you can begin working (e.g., immediately, 2 weeks notice)."
   },
   {
     id: 9,
-    question: "What is your primary mode of transportation?",
+    question: "How do you travel to work?",
     field: "transportation",
     prompt: "Share how you commute to work (e.g., personal vehicle, public transit, carpool)."
   },
   {
     id: 10,
-    question: "Do you meet the physical requirements of the job?",
+    question: "Are you okay with physical work?",
     field: "physical_capabilities",
-    prompt: "Confirm if you can lift 50+ lbs, stand for long periods, or meet other physical demands."
+    prompt: "Can you lift heavy items, stand long, or do hard work?"
   },
   {
     id: 11,
-    question: "How many years of experience do you have in this field?",
+    question: "How many years have you worked in this kind of job?",
     field: "experience_years",
-    prompt: "Share your total years of professional experience."
+    prompt: "Say the total years. If less than 1 year, say months."
   },
   {
     id: 12,
-    question: "Can you describe your work experience? Include companies, roles, and key achievements.",
+    question: "Tell me about your past jobs.",
     field: "experience_details",
-    prompt: "Tell me about your professional journey - companies you've worked for, positions held, and major accomplishments."
+    prompt: "Say company, job title, what you did, and results."
   },
   {
     id: 13,
-    question: "What role or job title are you applying for?",
+    question: "What job title do you want?",
     field: "role",
-    prompt: "Tell me about the role you're seeking."
+    prompt: "Say the exact job name you want."
   },
   {
     id: 14,
-    question: "Which languages do you speak?",
+    question: "Which languages can you speak?",
     field: "languages",
-    prompt: "Tell me about the languages you can speak and your proficiency level in each."
+    prompt: "List the languages and how well you speak them."
   },
   {
     id: 15,
-    question: "Are you willing to work full-time, part-time, or on a contract basis?",
+    question: "Do you want full-time, part-time, or contract work?",
     field: "work_type_preference",
-    prompt: "Share your preference for work type - full-time, part-time, or contract."
+    prompt: "Say full-time, part-time, or contract."
   },
   {
     id: 16,
-    question: "What are your key skills?",
+    question: "What skills do you have?",
     field: "skills",
-    prompt: "List your skills, tools, and technologies you're proficient in."
+    prompt: "List your main skills or tools you can use."
   },
   {
     id: 17,
-    question: "Do you have any referrals?",
+    question: "Do you have any references?",
     field: "referrals",
-    prompt: "Share any referrals or references you have."
+    prompt: "Give names and contact of people who can speak about your work."
   },
   {
     id: 18,
-    question: "What is your educational background?",
+    question: "What is your education?",
     field: "education",
-    prompt: "Tell me about your degrees, institutions, and graduation years."
+    prompt: "Say your highest class/degree, school/college, and year."
   },
   {
     id: 19,
-    question: "What is your email address?",
+    question: "What is your email?",
     field: "email",
-    prompt: "Share your professional email address."
+    prompt: "Share your email address."
   },
   {
     id: 20,
-    question: "Can you give me a brief professional summary about yourself?",
+    question: "Tell a short summary about your work.",
     field: "summary",
-    prompt: "Provide a brief overview of who you are professionally - your expertise, strengths, and career goals."
+    prompt: "Say what you do, your top skills, and what job you want next."
   }
 ]

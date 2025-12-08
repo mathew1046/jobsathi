@@ -1,63 +1,125 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import AudioRecorder from './components/AudioRecorder'
-import { RESUME_QUESTIONS } from './constants/questions'
+import './App.css'
+import LoadingScreen from './components/LoadingScreen'
+import QuestionFlowCard from './components/QuestionFlowCard'
+import ResumeResultCard from './components/ResumeResultCard'
 import Navbar from './components/home/Navbar'
 import HeroSection from './components/home/HeroSection'
 import LanguageSelector from './components/home/LanguageSelector'
-import QuestionFlowCard from './components/QuestionFlowCard'
-import ResumeResultCard from './components/ResumeResultCard'
+import LanguageSelectionModal from './components/home/LanguageSelectionModal'
 import Footer from './components/home/Footer'
-import './App.css'
+import { RESUME_QUESTIONS } from './constants/questions'
+import uiStrings from './constants/ui_strings.json'
+import LANG_MAP from './constants/lang'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 const DEFAULT_LANGUAGES = [
-  { code: 'hi', label: 'Hindi' },
+  { code: 'en', label: 'English' },
+  { code: 'as', label: 'Assamese' },
   { code: 'bn', label: 'Bengali' },
-  { code: 'ta', label: 'Tamil' },
-  { code: 'te', label: 'Telugu' },
+  { code: 'brx', label: 'Bodo' },
+  { code: 'doi', label: 'Dogri' },
+  { code: 'gom', label: 'Konkani' },
+  { code: 'gu', label: 'Gujarati' },
+  { code: 'hi', label: 'Hindi' },
+  { code: 'kn', label: 'Kannada' },
+  { code: 'ks', label: 'Kashmiri (Arabic)' },
+  { code: 'ks-deva', label: 'Kashmiri (Devanagari)' },
+  { code: 'mai', label: 'Maithili' },
   { code: 'ml', label: 'Malayalam' },
   { code: 'mr', label: 'Marathi' },
-  { code: 'gu', label: 'Gujarati' },
-  { code: 'pa', label: 'Punjabi' },
+  { code: 'mni', label: 'Meitei (Bengali script)' },
+  { code: 'mni-mtei', label: 'Meitei (Meitei script)' },
+  { code: 'npi', label: 'Nepali' },
   { code: 'or', label: 'Odia' },
-  { code: 'as', label: 'Assamese' },
-  { code: 'en', label: 'English' }
+  { code: 'pa', label: 'Punjabi' },
+  { code: 'sa', label: 'Sanskrit' },
+  { code: 'sat', label: 'Santali' },
+  { code: 'sd', label: 'Sindhi (Arabic)' },
+  { code: 'sd-deva', label: 'Sindhi (Devanagari)' },
+  { code: 'ta', label: 'Tamil' },
+  { code: 'te', label: 'Telugu' },
+  { code: 'ur', label: 'Urdu' },
 ]
 
-function App() {
-  // UI State
-  const [darkMode, setDarkMode] = useState(false)
-  const [currentStep, setCurrentStep] = useState('welcome') // welcome, qa, profile
-  const [selectedLanguage, setSelectedLanguage] = useState('hi')
+const defaultStrings = uiStrings
+
+const App = () => {
+  const [selectedLanguage, setSelectedLanguage] = useState('en')
+  const [translations, setTranslations] = useState(defaultStrings)
+  const [translatedQuestions, setTranslatedQuestions] = useState(RESUME_QUESTIONS)
+  const [isTranslating, setIsTranslating] = useState(false)
   const [languages, setLanguages] = useState(DEFAULT_LANGUAGES)
-
-  // Q&A State
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
-  const [qaResponses, setQaResponses] = useState([])
-  const [isProcessingAnswer, setIsProcessingAnswer] = useState(false)
-  const [textAnswer, setTextAnswer] = useState('')
-  const [sessionId, setSessionId] = useState(null)
-
-  // Profile State
-  const [finalProfile, setFinalProfile] = useState(null)
-  const [isBuildingProfile, setIsBuildingProfile] = useState(false)
-
-  // Job Search State
-  const [jobs, setJobs] = useState([])
-  const [isSearchingJobs, setIsSearchingJobs] = useState(false)
-  const [showJobs, setShowJobs] = useState(false)
-
-  // Error & Status
-  const [error, setError] = useState('')
-  const [statusMessage, setStatusMessage] = useState('')
-
-  // Audio TTS State
+  const [darkMode, setDarkMode] = useState(false)
   const [questionAudio, setQuestionAudio] = useState(null)
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
-  const [audioAvailable, setAudioAvailable] = useState(true)
+  const [audioAvailable, setAudioAvailable] = useState(false)
   const [audioError, setAudioError] = useState('')
+  const [currentStep, setCurrentStep] = useState('welcome')
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [isProcessingAnswer, setIsProcessingAnswer] = useState(false)
+  const [statusMessage, setStatusMessage] = useState('')
+  const [sessionId, setSessionId] = useState(null)
+  const [qaResponses, setQaResponses] = useState([])
+  const [error, setError] = useState('')
+  const [textAnswer, setTextAnswer] = useState('')
+  const [isBuildingProfile, setIsBuildingProfile] = useState(false)
+  const [finalProfile, setFinalProfile] = useState(null)
+  const [isSearchingJobs, setIsSearchingJobs] = useState(false)
+  const [jobs, setJobs] = useState([])
+  const [showJobs, setShowJobs] = useState(false)
+  const [isLanguageSelected, setIsLanguageSelected] = useState(false)
+
+  const resetQuestionAudio = () => {
+    if (questionAudio) {
+      questionAudio.pause()
+      questionAudio.currentTime = 0
+    }
+    setQuestionAudio(null)
+    setIsPlayingAudio(false)
+    setAudioAvailable(false)
+    setAudioError('')
+  }
+
+  useEffect(() => {
+    const applyTranslations = async () => {
+      if (!selectedLanguage) return
+
+      const bundle = LANG_MAP[selectedLanguage]
+      if (!bundle) {
+        setTranslations(defaultStrings)
+        setTranslatedQuestions(RESUME_QUESTIONS)
+        setIsTranslating(false)
+        return
+      }
+
+      setIsTranslating(true)
+      try {
+        const mapped = { ...defaultStrings, ...bundle }
+
+        const newQuestions = RESUME_QUESTIONS.map(q => ({
+          ...q,
+          question: mapped[`q_${q.id}`] || q.question,
+          prompt: mapped[`p_${q.id}`] || q.prompt,
+        }))
+
+        setTranslations(mapped)
+        setTranslatedQuestions(newQuestions)
+      } catch (error) {
+        console.error('Translation load error:', error)
+        setTranslations(defaultStrings)
+        setTranslatedQuestions(RESUME_QUESTIONS)
+      } finally {
+        setIsTranslating(false)
+      }
+    }
+
+    applyTranslations()
+  }, [selectedLanguage])
+
+  const t = (key) => translations[key] || defaultStrings[key] || key
 
   useEffect(() => {
     if (darkMode) {
@@ -70,31 +132,15 @@ function App() {
   }, [darkMode])
 
   useEffect(() => {
-    const fetchLanguages = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/languages`)
-        if (response.ok) {
-          const payload = await response.json()
-          const available = Array.isArray(payload.languages) ? payload.languages : []
-          if (available.length) {
-            setLanguages(available)
-          }
-        }
-      } catch (err) {
-        console.error('Language load error:', err)
-      }
-    }
-    fetchLanguages()
+    setLanguages(DEFAULT_LANGUAGES)
   }, [])
 
-  // Load question audio when question changes or language changes
   useEffect(() => {
     if (currentStep === 'qa' && currentQuestionIndex >= 0) {
       loadQuestionAudio()
     }
   }, [currentQuestionIndex, selectedLanguage, currentStep])
 
-  // Cleanup audio on unmount
   useEffect(() => {
     return () => {
       if (questionAudio) {
@@ -105,50 +151,55 @@ function App() {
   }, [questionAudio])
 
   const loadQuestionAudio = async () => {
-    // Stop any currently playing audio
-    if (questionAudio) {
-      questionAudio.pause()
-      questionAudio.currentTime = 0
-    }
+    resetQuestionAudio()
 
-    const currentQuestion = RESUME_QUESTIONS[currentQuestionIndex]
-    const audioPath = `${API_BASE_URL}/audio/${selectedLanguage}/q${currentQuestion.id}.mp3`
+    if (currentQuestionIndex < 0 || currentQuestionIndex >= translatedQuestions.length) return
+
+    const translatedQuestion = translatedQuestions[currentQuestionIndex]
+    const fallbackEnglish = RESUME_QUESTIONS[currentQuestionIndex]
+    const textToSend = `${translatedQuestion?.question || ''} ${translatedQuestion?.prompt || ''}`.trim() || fallbackEnglish.question
 
     try {
-      // Check if audio file exists
-      const response = await fetch(audioPath, { method: 'HEAD' })
+      setAudioAvailable(false)
+      setAudioError('')
 
-      if (response.ok) {
-        const audio = new Audio(audioPath)
+      const params = new URLSearchParams({
+        text: textToSend,
+        language: selectedLanguage || 'en',
+      })
 
-        audio.addEventListener('ended', () => {
-          setIsPlayingAudio(false)
-        })
+      const resp = await fetch(`${API_BASE_URL}/get-question-audio?${params.toString()}`)
 
-        audio.addEventListener('error', () => {
-          setAudioAvailable(false)
-          setAudioError('TTS not available for this language')
-        })
+      if (!resp.ok) throw new Error('TTS request failed')
 
-        setQuestionAudio(audio)
-        setAudioAvailable(true)
-        setAudioError('')
+      const blob = await resp.blob()
+      const audioUrl = URL.createObjectURL(blob)
+      const audio = new Audio(audioUrl)
 
-        // Auto-play the question audio
-        audio.play().catch(() => {
-          setIsPlayingAudio(false)
-        })
-        setIsPlayingAudio(true)
-      } else {
-        setQuestionAudio(null)
+      audio.addEventListener('ended', () => {
+        setIsPlayingAudio(false)
+      })
+
+      audio.addEventListener('error', () => {
         setAudioAvailable(false)
         setAudioError('TTS not available for this language')
-      }
+      })
+
+      setQuestionAudio(audio)
+      setAudioAvailable(true)
+      setAudioError('')
+
+      audio.play().catch(() => {
+        setIsPlayingAudio(false)
+      })
+      setIsPlayingAudio(true)
+
     } catch (err) {
       console.log('Audio load error:', err)
       setQuestionAudio(null)
       setAudioAvailable(false)
       setAudioError('TTS not available for this language')
+      setIsPlayingAudio(false)
     }
   }
 
@@ -190,7 +241,6 @@ function App() {
 
   const handleStartQA = async () => {
     try {
-      // Create a new session
       const response = await fetch(`${API_BASE_URL}/start_session`, {
         method: 'POST'
       })
@@ -215,13 +265,12 @@ function App() {
   }
 
   const handleRecordingComplete = async (audioFile) => {
-    stopQuestionAudio() // Stop audio when recording completes
+    stopQuestionAudio()
     setIsProcessingAnswer(true)
     setError('')
     setStatusMessage('Transcribing your answer...')
 
     try {
-      // Step 1: Transcribe the audio
       const formData = new FormData()
       formData.append('audio', audioFile)
       formData.append('source_language', selectedLanguage)
@@ -245,7 +294,6 @@ function App() {
 
       setStatusMessage('Extracting information...')
 
-      // Step 2: Extract structured data from the transcript
       const currentQuestion = RESUME_QUESTIONS[currentQuestionIndex]
       const llmResponse = await fetch(`${API_BASE_URL}/ask_llm`, {
         method: 'POST',
@@ -268,7 +316,6 @@ function App() {
 
       const llmData = await llmResponse.json()
 
-      // Store the Q&A response
       const newResponse = {
         question_id: currentQuestion.id,
         field: currentQuestion.field,
@@ -280,13 +327,12 @@ function App() {
       const updatedResponses = [...qaResponses, newResponse]
       setQaResponses(updatedResponses)
 
-      // Move to next question or finish
       if (currentQuestionIndex < RESUME_QUESTIONS.length - 1) {
+        resetQuestionAudio()
         setCurrentQuestionIndex(currentQuestionIndex + 1)
         setStatusMessage('')
         setTextAnswer('')
       } else {
-        // All questions answered, build profile
         await buildFinalProfile(updatedResponses)
       }
 
@@ -301,7 +347,7 @@ function App() {
     }
   }
 
-  const buildFinalProfile = async (responses) => {
+  const buildFinalProfile = async () => {
     setIsBuildingProfile(true)
     setStatusMessage('Building your ATS-optimized resume...')
     setCurrentStep('profile')
@@ -323,7 +369,6 @@ function App() {
       const data = await response.json()
       setFinalProfile(data.profile)
 
-      // Store PDF filename for download
       if (data.pdf_filename) {
         setFinalProfile(prev => ({ ...prev, pdf_filename: data.pdf_filename }))
       }
@@ -376,7 +421,7 @@ function App() {
   }
 
   const handleTextSubmit = async () => {
-    stopQuestionAudio() // Stop audio when submitting text
+    stopQuestionAudio()
     if (!textAnswer.trim()) {
       setError('Please enter an answer or use voice recording')
       return
@@ -421,6 +466,7 @@ function App() {
       setQaResponses(updatedResponses)
 
       if (currentQuestionIndex < RESUME_QUESTIONS.length - 1) {
+        resetQuestionAudio()
         setCurrentQuestionIndex(currentQuestionIndex + 1)
         setStatusMessage('')
         setTextAnswer('')
@@ -451,6 +497,7 @@ function App() {
     setTextAnswer('')
 
     if (currentQuestionIndex < RESUME_QUESTIONS.length - 1) {
+      resetQuestionAudio()
       setCurrentQuestionIndex(currentQuestionIndex + 1)
     } else {
       buildFinalProfile(updatedResponses)
@@ -478,15 +525,29 @@ function App() {
     URL.revokeObjectURL(url)
   }
 
-  const currentQuestion = RESUME_QUESTIONS[currentQuestionIndex]
-  const progress = ((currentQuestionIndex + 1) / RESUME_QUESTIONS.length) * 100
+  const handleLanguageSelect = (langCode) => {
+    setSelectedLanguage(langCode)
+    setIsLanguageSelected(true)
+  }
+
+  if (!isLanguageSelected) {
+    return (
+      <LanguageSelectionModal
+        languages={languages}
+        onSelectLanguage={handleLanguageSelect}
+      />
+    )
+  }
+
+  if (isTranslating) {
+    return <LoadingScreen message="Translating the experience for you..." />
+  }
 
   return (
     <div className="min-h-screen flex flex-col font-sans selection:bg-neon-purple selection:text-white">
-      <Navbar darkMode={darkMode} toggleDarkMode={() => setDarkMode(!darkMode)} />
+      <Navbar darkMode={darkMode} toggleDarkMode={() => setDarkMode(!darkMode)} t={t} />
 
       <AnimatePresence mode="wait">
-        {/* Main Content Area */}
         {currentStep === 'welcome' && (
           <motion.main
             key="welcome"
@@ -497,35 +558,33 @@ function App() {
             className="flex-grow flex items-center justify-center relative p-6 pt-24 min-h-[90vh]"
           >
             <div className="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center z-10">
-              {/* Left Column: Text & CTA */}
-              <HeroSection onStart={handleStartQA} />
+              <HeroSection onStart={handleStartQA} t={t} />
 
-              {/* Right Column: Language Card */}
               <div className="flex justify-center lg:justify-end">
                 <LanguageSelector
                   selectedLanguage={selectedLanguage}
                   setSelectedLanguage={setSelectedLanguage}
                   languages={languages}
+                  t={t}
                 />
               </div>
             </div>
           </motion.main>
         )}
 
-        {/* Legacy/Existing Views wrapped in a clean container */}
         {currentStep !== 'welcome' && (
           <motion.main
-            key={currentStep} // 'qa' or 'profile'
+            key={currentStep}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.5 }}
             className="flex-grow w-full max-w-screen-xl mx-auto px-4 py-24"
           >
-            {/* Q&A Screen */}
             {currentStep === 'qa' && (
               <QuestionFlowCard
-                currentQuestion={currentQuestion}
+                key={translatedQuestions[currentQuestionIndex]?.id || currentQuestionIndex}
+                currentQuestion={translatedQuestions[currentQuestionIndex]}
                 currentIndex={currentQuestionIndex}
                 totalQuestions={RESUME_QUESTIONS.length}
                 audioControl={{
@@ -550,10 +609,10 @@ function App() {
                 onSkip={handleSkipQuestion}
                 onRestart={handleRestart}
                 error={error}
+                t={t}
               />
             )}
 
-            {/* Profile Display Screen */}
             {currentStep === 'profile' && (
               <ResumeResultCard
                 profile={finalProfile}
@@ -561,13 +620,14 @@ function App() {
                 statusMessage={statusMessage}
                 onRestart={handleRestart}
                 apiBaseUrl={API_BASE_URL}
+                t={t}
               />
             )}
           </motion.main>
         )}
       </AnimatePresence>
 
-      <Footer />
+      <Footer t={t} />
     </div>
   )
 }
