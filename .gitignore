@@ -6,6 +6,10 @@ __pycache__/
 # Database folder with user data
 backend/app/database/
 *.json
+
+# Allow frontend translation bundles
+!frontend/src/constants/ui_strings.json
+!frontend/src/constants/lang/*.json
 *.pdf
 
 # C extensions
