@@ -135,73 +135,8 @@ const App = () => {
     setLanguages(DEFAULT_LANGUAGES)
   }, [])
 
-  useEffect(() => {
-    if (currentStep === 'qa' && currentQuestionIndex >= 0) {
-      loadQuestionAudio()
-    }
-  }, [currentQuestionIndex, selectedLanguage, currentStep])
-
-  useEffect(() => {
-    return () => {
-      if (questionAudio) {
-        questionAudio.pause()
-        questionAudio.currentTime = 0
-      }
-    }
-  }, [questionAudio])
-
-  const loadQuestionAudio = async () => {
-    resetQuestionAudio()
-
-    if (currentQuestionIndex < 0 || currentQuestionIndex >= translatedQuestions.length) return
-
-    const translatedQuestion = translatedQuestions[currentQuestionIndex]
-    const fallbackEnglish = RESUME_QUESTIONS[currentQuestionIndex]
-    const textToSend = `${translatedQuestion?.question || ''} ${translatedQuestion?.prompt || ''}`.trim() || fallbackEnglish.question
-
-    try {
-      setAudioAvailable(false)
-      setAudioError('')
-
-      const params = new URLSearchParams({
-        text: textToSend,
-        language: selectedLanguage || 'en',
-      })
-
-      const resp = await fetch(`${API_BASE_URL}/get-question-audio?${params.toString()}`)
-
-      if (!resp.ok) throw new Error('TTS request failed')
-
-      const blob = await resp.blob()
-      const audioUrl = URL.createObjectURL(blob)
-      const audio = new Audio(audioUrl)
-
-      audio.addEventListener('ended', () => {
-        setIsPlayingAudio(false)
-      })
-
-      audio.addEventListener('error', () => {
-        setAudioAvailable(false)
-        setAudioError('TTS not available for this language')
-      })
-
-      setQuestionAudio(audio)
-      setAudioAvailable(true)
-      setAudioError('')
-
-      audio.play().catch(() => {
-        setIsPlayingAudio(false)
-      })
-      setIsPlayingAudio(true)
-
-    } catch (err) {
-      console.log('Audio load error:', err)
-      setQuestionAudio(null)
-      setAudioAvailable(false)
-      setAudioError('TTS not available for this language')
-      setIsPlayingAudio(false)
-    }
-  }
+  // Audio loading logic removed as per request
+  // The audio player UI will remain but won't play anything until audio files are provided
 
   const handleReplayAudio = () => {
     if (questionAudio && audioAvailable) {
