@@ -59,7 +59,7 @@ deploy:backend:
   before_script:
     - apt-get update && apt-get install -y git curl
     # Install git-xet
-    - curl -fsSL https://github.com/xetdata/xet-tools/releases/latest/download/xet-linux-x86_64.tar.gz | tar -xz -C /usr/bin
+    - curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
     - git xet install
   script:
     - echo "Deploying Backend to HuggingFace Spaces..."
