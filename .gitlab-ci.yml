@@ -70,6 +70,7 @@ deploy:backend:
     # Install git-xet
     - curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
     - git xet install
+    - git xet track "*.mp3"
   script:
     - echo "Deploying Backend to HuggingFace Spaces..."
     - git config --global user.email "ci@gitlab.com"
@@ -79,8 +80,6 @@ deploy:backend:
     - git remote add space https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME
     
     # Initialize Xet (force to override if needed) and track mp3 files
-    - git xet init --force
-    - git xet track "*.mp3"
     
     # Commit the Xet configuration and convert existing files
     - git add .gitattributes
