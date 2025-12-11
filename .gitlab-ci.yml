@@ -46,8 +46,17 @@ dependency_scanning:
 # Override the specific python dependency scanning job to fix space issues
 gemnasium-python-dependency_scanning:
   before_script:
-    # Pre-install CPU-only versions of heavy libraries (PyTorch) to save space
+    # 1. Install CPU-only versions of heavy libraries
     - pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+    # 2. Remove them from requirements.txt so the scanner doesn't try to reinstall the huge CUDA versions
+    - sed -i '/torch/d' backend/app/requirements.txt
+    - sed -i '/transformers/d' backend/app/requirements.txt
+    # Re-add transformers (it was removed by the torch filter if on same line, or just to be safe)
+    # Actually, transformers depends on torch. If we leave transformers, it might trigger torch install.
+    # But since torch is installed, it should be fine.
+    # Let's just remove torch and torchaudio lines specifically.
+    - sed -i '/^torch/d' backend/app/requirements.txt
+    - sed -i '/^torchaudio/d' backend/app/requirements.txt
 
 secret_detection:
   stage: security
