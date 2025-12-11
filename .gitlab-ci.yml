@@ -66,9 +66,8 @@ deploy:backend:
   stage: deploy
   image: python:3.10-slim
   before_script:
-    - apt-get update && apt-get install -y git curl
+    - apt-get update && apt-get install -y git curl unzip
     # Install git-xet
-    - sudo apt install unzip
     - curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
     - git xet install
   script:
