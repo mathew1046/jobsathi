@@ -1,0 +1,82 @@
+stages:
+  - build
+  - security
+  - deploy
+
+# Global image for frontend-focused tasks
+image: node:latest
+
+# Cache node_modules for faster builds
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - frontend/node_modules/
+
+# 1. Build Frontend
+build:frontend:
+  stage: build
+  script:
+    - echo "Starting frontend build..."
+    - cd frontend
+    - npm install
+    - npm run build
+  artifacts:
+    paths:
+      - frontend/dist/
+    expire_in: 1 day
+
+# 2. Security Stage
+# Includes SAST (Static Application Security Testing), Secret Detection, and Dependency Scanning
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+  - template: Security/Dependency-Scanning.gitlab-ci.yml
+
+sast:
+  stage: security
+  variables:
+    SAST_EXCLUDED_PATHS: "spec, test, tests, tmp, node_modules"
+
+dependency_scanning:
+  stage: security
+  variables:
+    SECURE_LOG_LEVEL: "debug"
+
+secret_detection:
+  stage: security
+
+# 3. Deploy Frontend (Vercel)
+deploy:frontend:
+  stage: deploy
+  image: node:latest
+  script:
+    - echo "Deploying Frontend to Vercel..."
+    - cd frontend
+    - npm install --global vercel
+    # Pull Vercel project settings (requires VERCEL_ORG_ID and VERCEL_PROJECT_ID)
+    - vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+    # Build the project
+    - vercel build --prod --token=$VERCEL_TOKEN
+    # Deploy the prebuilt artifacts
+    - vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+  only:
+    - main
+
+# 4. Deploy Backend (HuggingFace Spaces)
+deploy:backend:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache git
+  script:
+    - echo "Deploying Backend to HuggingFace Spaces..."
+    - git config --global user.email "ci@gitlab.com"
+    - git config --global user.name "GitLab CI"
+    # Add HuggingFace remote (requires HF_USERNAME, HF_SPACE_NAME, HF_TOKEN)
+    - git remote add space https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME
+    # Unshallow the fetch to ensure we can push
+    - git fetch --unshallow origin || git fetch origin
+    # Push the current code to the HuggingFace Space
+    - git push space HEAD:main -f
+  only:
+    - main
