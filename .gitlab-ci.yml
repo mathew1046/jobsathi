@@ -41,13 +41,14 @@ dependency_scanning:
   stage: security
   variables:
     SECURE_LOG_LEVEL: "debug"
-    # Exclude node_modules and test folders
     DS_EXCLUDED_PATHS: "node_modules,test,tests,venv"
+
+# Override the specific python dependency scanning job to fix space issues
+gemnasium-python-dependency_scanning:
   before_script:
-    # Fix for "No space left on device":
-    # Pre-install CPU-only versions of heavy libraries (PyTorch) so the scanner doesn't download the huge CUDA versions.
-    - pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-  
+    # Pre-install CPU-only versions of heavy libraries (PyTorch) to save space
+    - pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+
 secret_detection:
   stage: security
 
@@ -65,8 +66,11 @@ deploy:backend:
     - git config --global user.email "ci@gitlab.com"
     - git config --global user.name "GitLab CI"
     
-    # Initialize Xet and track mp3 files
-    - git xet init
+    # Add HuggingFace remote FIRST so git-xet can detect it
+    - git remote add space https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME
+    
+    # Initialize Xet (force to override if needed) and track mp3 files
+    - git xet init --force
     - git xet track "*.mp3"
     
     # Commit the Xet configuration and convert existing files
@@ -74,8 +78,6 @@ deploy:backend:
     - git add --renormalize .
     - git commit -m "Configure git-xet and convert mp3 files" || echo "No changes to commit"
 
-    # Add HuggingFace remote (requires HF_USERNAME, HF_SPACE_NAME, HF_TOKEN)
-    - git remote add space https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME
     # Unshallow the fetch to ensure we can push
     - git fetch --unshallow origin || git fetch origin
     # Push the current code to the HuggingFace Space
