@@ -9,6 +9,7 @@ import HeroSection from './components/home/HeroSection'
 import LanguageSelector from './components/home/LanguageSelector'
 import LanguageSelectionModal from './components/home/LanguageSelectionModal'
 import Footer from './components/home/Footer'
+import EmployerDashboard from './components/employer/EmployerDashboard'
 import { RESUME_QUESTIONS } from './constants/questions'
 import uiStrings from './constants/ui_strings.json'
 import LANG_MAP from './constants/lang'
@@ -480,7 +481,12 @@ const App = () => {
 
   return (
     <div className="min-h-screen flex flex-col font-sans selection:bg-neon-purple selection:text-white">
-      <Navbar darkMode={darkMode} toggleDarkMode={() => setDarkMode(!darkMode)} t={t} />
+      <Navbar
+        darkMode={darkMode}
+        toggleDarkMode={() => setDarkMode(!darkMode)}
+        t={t}
+        onEmployerClick={() => setCurrentStep('employer')}
+      />
 
       <AnimatePresence mode="wait">
         {currentStep === 'welcome' && (
@@ -507,7 +513,19 @@ const App = () => {
           </motion.main>
         )}
 
-        {currentStep !== 'welcome' && (
+        {currentStep === 'employer' && (
+          <motion.div
+            key="employer"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="fixed inset-0 z-50 bg-white dark:bg-gray-900"
+          >
+            <EmployerDashboard onBackToHome={() => setCurrentStep('welcome')} />
+          </motion.div>
+        )}
+
+        {currentStep !== 'welcome' && currentStep !== 'employer' && (
           <motion.main
             key={currentStep}
             initial={{ opacity: 0, y: 20 }}
