@@ -3,6 +3,7 @@
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import tempfile
@@ -41,6 +42,9 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"]
 )
+
+# Mount audio files
+app.mount("/audio", StaticFiles(directory="app/audio_files"), name="audio")
 
 # Load configuration from environment
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")

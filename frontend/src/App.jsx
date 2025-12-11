@@ -12,7 +12,7 @@ import Footer from './components/home/Footer'
 import EmployerDashboard from './components/employer/EmployerDashboard'
 import { RESUME_QUESTIONS } from './constants/questions'
 import uiStrings from './constants/ui_strings.json'
-import LANG_MAP from './constants/lang'
+import LANG_MAP, { LANG_FOLDER_MAP } from './constants/lang'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
@@ -136,8 +136,46 @@ const App = () => {
     setLanguages(DEFAULT_LANGUAGES)
   }, [])
 
-  // Audio loading logic removed as per request
-  // The audio player UI will remain but won't play anything until audio files are provided
+  // Load audio for the current question
+  useEffect(() => {
+    resetQuestionAudio()
+
+    if (currentStep !== 'qa' || selectedLanguage === 'en') {
+      return
+    }
+
+    const folderName = LANG_FOLDER_MAP[selectedLanguage]
+    if (!folderName) return
+
+    const questionId = translatedQuestions[currentQuestionIndex]?.id
+    if (!questionId) return
+
+    const audioUrl = `${API_BASE_URL}/audio/${folderName}/q_p_${questionId}.mp3`
+    
+    const audio = new Audio(audioUrl)
+    
+    audio.addEventListener('canplaythrough', () => {
+      setAudioAvailable(true)
+      setQuestionAudio(audio)
+      // Optional: Auto-play
+      // audio.play().then(() => setIsPlayingAudio(true)).catch(e => console.log("Auto-play blocked", e))
+    })
+
+    audio.addEventListener('error', (e) => {
+      console.warn('Audio load error:', e)
+      setAudioAvailable(false)
+      setAudioError('Audio not available')
+    })
+
+    audio.addEventListener('ended', () => {
+      setIsPlayingAudio(false)
+    })
+
+    return () => {
+      audio.pause()
+      audio.src = ''
+    }
+  }, [currentQuestionIndex, selectedLanguage, currentStep, translatedQuestions])
 
   const handleReplayAudio = () => {
     if (questionAudio && audioAvailable) {

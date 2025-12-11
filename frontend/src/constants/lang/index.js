@@ -55,4 +55,33 @@ const LANG_MAP = {
   ur: urd_Arab,
 }
 
+export const LANG_FOLDER_MAP = {
+  en: 'en', // English usually doesn't have a folder or uses a default, but let's keep it for consistency if needed
+  as: 'asm_Beng',
+  bn: 'ben_Beng',
+  brx: 'brx_Deva',
+  doi: 'doi_Deva',
+  gom: 'gom_Deva',
+  gu: 'guj_Gujr',
+  hi: 'hin_Deva',
+  kn: 'kan_Knda',
+  ks: 'kas_Arab',
+  'ks-deva': 'kas_Deva',
+  mai: 'mai_Deva',
+  ml: 'mal_Mlym',
+  mr: 'mar_Deva',
+  mni: 'mni_Beng',
+  'mni-mtei': 'mni_Mtei',
+  npi: 'npi_Deva',
+  or: 'ory_Orya',
+  pa: 'pan_Guru',
+  sa: 'san_Deva',
+  sat: 'sat_Olck',
+  sd: 'snd_Arab',
+  'sd-deva': 'snd_Deva',
+  ta: 'tam_Taml',
+  te: 'tel_Telu',
+  ur: 'urd_Arab',
+}
+
 export default LANG_MAP
