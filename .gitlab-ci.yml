@@ -41,7 +41,13 @@ dependency_scanning:
   stage: security
   variables:
     SECURE_LOG_LEVEL: "debug"
-
+    # Exclude node_modules and test folders
+    DS_EXCLUDED_PATHS: "node_modules,test,tests,venv"
+  before_script:
+    # Fix for "No space left on device":
+    # Pre-install CPU-only versions of heavy libraries (PyTorch) so the scanner doesn't download the huge CUDA versions.
+    - pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+  
 secret_detection:
   stage: security
 
