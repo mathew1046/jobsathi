@@ -50,15 +50,15 @@ deploy:frontend:
   stage: deploy
   image: node:latest
   script:
-    - echo "Deploying Frontend to Vercel..."
-    - cd frontend
-    - npm install --global vercel
+    #- echo "Deploying Frontend to Vercel..."
+    #- cd frontend
+    #- npm install --global vercel
     # Pull Vercel project settings (requires VERCEL_ORG_ID and VERCEL_PROJECT_ID)
-    - vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+    #- vercel pull --yes --environment=production --token=$VERCEL_TOKEN
     # Build the project
-    - vercel build --prod --token=$VERCEL_TOKEN
+    #- vercel build --prod --token=$VERCEL_TOKEN
     # Deploy the prebuilt artifacts
-    - vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+    #- vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
   only:
     - main
 
