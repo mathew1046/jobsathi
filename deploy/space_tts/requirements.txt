@@ -1,9 +1,0 @@
-
-fastapi
-uvicorn
-torch
-transformers
-scipy
-soundfile
-# parler-tts is often needed for the architecture
-git+https://github.com/huggingface/parler-tts.git
