@@ -71,13 +71,26 @@ deploy:frontend:
 # 4. Deploy Backend (HuggingFace Spaces)
 deploy:backend:
   stage: deploy
-  image: alpine:latest
+  image: python:3.10-slim
   before_script:
-    - apk add --no-cache git
+    - apt-get update && apt-get install -y git curl
+    # Install git-xet
+    - curl -fsSL https://github.com/xetdata/xet-tools/releases/latest/download/xet-linux-x86_64.tar.gz | tar -xz -C /usr/bin
+    - git xet install
   script:
     - echo "Deploying Backend to HuggingFace Spaces..."
     - git config --global user.email "ci@gitlab.com"
     - git config --global user.name "GitLab CI"
+    
+    # Initialize Xet and track mp3 files
+    - git xet init
+    - git xet track "*.mp3"
+    
+    # Commit the Xet configuration and convert existing files
+    - git add .gitattributes
+    - git add --renormalize .
+    - git commit -m "Configure git-xet and convert mp3 files" || echo "No changes to commit"
+
     # Add HuggingFace remote (requires HF_USERNAME, HF_SPACE_NAME, HF_TOKEN)
     - git remote add space https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME
     # Unshallow the fetch to ensure we can push
