@@ -67,6 +67,7 @@ deploy:backend:
   image: python:3.10-slim
   before_script:
     - apt-get update && apt-get install -y git git-lfs curl unzip ca-certificates
+    - cd backend
     # Install git-xet
     - git lfs install
     - curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
