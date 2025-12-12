@@ -73,6 +73,21 @@ deploy:backend:
     - curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
     - git xet install
     - git xet track "*.mp3"
+    - git xet track "*.wav"
+    # Remove files from git history and re-add them through XET
+    - git rm --cached backend/app/audio_files/**/*.mp3
+    - git rm --cached backend/app/audio/**/*.mp3
+    - git rm --cached audio/**/*.wav
+    - git rm --cached audio.mp3
+
+    # Re-add files (they will now be handled by XET)
+    - git add backend/app/audio_files/
+    - git add backend/app/audio/
+    - git add audio/
+    - git add audio.mp3
+
+
+
   script:
     - echo "Deploying Backend to HuggingFace Spaces..."
     - git config --global user.email "ci@gitlab.com"
