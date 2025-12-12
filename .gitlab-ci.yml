@@ -75,10 +75,7 @@ deploy:backend:
     - git xet track "*.mp3"
     - git xet track "*.wav"
     # Remove files from git history and re-add them through XET
-    - git rm --cached backend/app/audio_files/**/*.mp3
-    - git rm --cached backend/app/audio/**/*.mp3
-    - git rm --cached audio/**/*.wav
-    - git rm --cached audio.mp3
+    - git rm --cached backend/app/audio_files/**/*.mp3 2>/dev/null || true
 
     # Re-add files (they will now be handled by XET)
     - git add backend/app/audio_files/
