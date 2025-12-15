@@ -284,6 +284,7 @@ Thumbs.db
 
 # Project specific
 # Audio files (temporary uploads)
+*.wav
 temp.wav
 temp.mp3
 temp_audio.*
