@@ -67,12 +67,19 @@ deploy:backend:
   image: python:3.10-slim
   before_script:
     - apt-get update && apt-get install -y git git-lfs curl unzip ca-certificates
+    - git rm --cached backend/app/audio_files/**/*.mp3
+    - git rm --cached audio/**/*.wav
+    - git commit -m "Remove binary files from git tracking"
+
     # Install git-xet
     - git lfs install
     - curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
     - git xet install
     - git xet track "*.mp3"
     - git xet track "*.wav"
+    # Re-add them with XET tracking
+    - git add backend/app/audio_files/**/*.mp3
+    - git commit -m "Add audio files with XET tracking"
 
 
 
