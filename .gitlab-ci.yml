@@ -78,7 +78,6 @@ deploy:backend:
     - git xet track "*.wav"
     # Re-add them with XET tracking
     - git add backend/app/audio_files/**/*.mp3
-    - git commit -m "Add audio files with XET tracking"
 
 
 
