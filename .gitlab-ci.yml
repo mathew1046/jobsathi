@@ -66,7 +66,7 @@ deploy:backend:
   stage: deploy
   image: python:3.10-slim
   script:
-    - apt-get update && apt-get install -y git git-lfs curl
+    - apt-get update && apt-get install -y git git-lfs curl unzip ca-certificates
     # Install Xet
     - curl -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
     - export PATH="$PATH:/root/.xet" 
