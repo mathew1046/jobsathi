@@ -86,15 +86,14 @@ deploy:backend:
     - git config --global user.name "GitLab CI"
     
     # Add HuggingFace remote FIRST so git-xet can detect it
-    - git remote add space https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME
+    - git remote add origin https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME
     
     # Initialize Xet (force to override if needed) and track mp3 files
     - git add .
     - git commit -m "Configure git-xet and convert mp3 files" || echo "No changes to commit"
 
     # Unshallow the fetch to ensure we can push
-    - git fetch --unshallow origin || git fetch origin
     # Push the current code to the HuggingFace Space
-    - git push space HEAD:main -f
+    - git push origin HEAD:main -f
   only:
     - main
