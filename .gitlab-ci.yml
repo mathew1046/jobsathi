@@ -71,8 +71,6 @@ deploy:backend:
     - git lfs install
     - curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
     - git xet install
-    - git xet track "*.mp3"
-    - git xet track "*.wav"
     # Re-add them with XET tracking
 
 
@@ -87,7 +85,8 @@ deploy:backend:
     
     # Add HuggingFace remote FIRST so git-xet can detect it
     - git remote add origin https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME
-    
+    - git xet track *.mp3
+    - git add .gitattributes
     # Initialize Xet (force to override if needed) and track mp3 files
     - git add .
     - git commit -m "Configure git-xet and convert mp3 files" || echo "No changes to commit"
