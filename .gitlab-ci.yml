@@ -65,34 +65,28 @@ secret_detection:
 deploy:backend:
   stage: deploy
   image: python:3.10-slim
-  before_script:
-    - apt-get update && apt-get install -y git git-lfs curl unzip ca-certificates
-    # Install git-xet
-    - git lfs install
-    - curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
-    - git xet install
-    # Re-add them with XET tracking
-
-
-
   script:
-    - rm -rf .git
-    - cd backend
-    - git init
-    - echo "Deploying Backend to HuggingFace Spaces..."
+    - apt-get update && apt-get install -y git git-lfs curl
+    # Install Xet
+    - curl -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
+    - export PATH="$PATH:/root/.xet" 
+    
+    # Clone instead of git init to preserve history
     - git config --global user.email "ci@gitlab.com"
     - git config --global user.name "GitLab CI"
+    - git clone https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME hf_space
     
-    # Add HuggingFace remote FIRST so git-xet can detect it
-    - git remote add origin https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME
-    - git xet track *.mp3
-    - git add .gitattributes
-    # Initialize Xet (force to override if needed) and track mp3 files
+    # Sync backend files to clone directory
+    - cp -r backend/* hf_space/
+    - cd hf_space
+    
+    # Xet / LFS setup
+    - git xet init
+    - git xet track "**/*.mp3"
     - git add .
-    - git commit -m "Configure git-xet and convert mp3 files" || echo "No changes to commit"
-
-    # Unshallow the fetch to ensure we can push
-    # Push the current code to the HuggingFace Space
-    - git push origin HEAD:main -f
+    - git commit -m "Deploy from GitLab CI" || echo "No changes"
+    - git push origin main
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
   only:
     - main
