@@ -86,7 +86,5 @@ deploy:backend:
     - git add .
     - git commit -m "Deploy from GitLab CI" || echo "No changes"
     - git push origin main
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
   only:
     - main
