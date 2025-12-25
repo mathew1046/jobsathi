@@ -89,10 +89,7 @@ deploy:backend:
     - git remote add space https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME
     
     # Initialize Xet (force to override if needed) and track mp3 files
-    
-    # Commit the Xet configuration and convert existing files
-    - git add .gitattributes
-    - git add --renormalize .
+    - git add .
     - git commit -m "Configure git-xet and convert mp3 files" || echo "No changes to commit"
 
     # Unshallow the fetch to ensure we can push
