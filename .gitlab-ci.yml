@@ -70,6 +70,8 @@ deploy:backend:
     # Install Xet
     - curl -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
     - export PATH="$PATH:/root/.xet" 
+    - git lfs install
+    - git xet install
     
     # Clone instead of git init to preserve history
     - git config --global user.email "ci@gitlab.com"
@@ -81,8 +83,8 @@ deploy:backend:
     - cd hf_space
     
     # Xet / LFS setup
-    - git xet init
-    - git xet track "**/*.mp3"
+    - git xet track *.mp3
+    - git add .gitattributes
     - git add .
     - git commit -m "Deploy from GitLab CI" || echo "No changes"
     - git push origin main
