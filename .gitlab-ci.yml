@@ -67,8 +67,6 @@ deploy:backend:
   image: python:3.10-slim
   before_script:
     - apt-get update && apt-get install -y git git-lfs curl unzip ca-certificates
-    - git rm --cached backend/app/audio_files/**/*.mp3
-    - cd backend
     # Install git-xet
     - git lfs install
     - curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
@@ -76,11 +74,13 @@ deploy:backend:
     - git xet track "*.mp3"
     - git xet track "*.wav"
     # Re-add them with XET tracking
-    - git add backend/app/audio_files/**/*.mp3
 
 
 
   script:
+    - rm -rf .git
+    - cd backend
+    - git init
     - echo "Deploying Backend to HuggingFace Spaces..."
     - git config --global user.email "ci@gitlab.com"
     - git config --global user.name "GitLab CI"
