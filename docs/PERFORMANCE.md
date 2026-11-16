@@ -9,9 +9,9 @@ The primary Driver/Bengaluru search improved from **55.400 ms to 3.190 ms HTTP m
 p95 across the three measured searches was **5.106 ms**, below the 180 ms read-path
 target **under the tested single-client, warm-cache conditions**.
 
-The illustrative 900 ms → 60 ms baseline was **not observed** on this machine. These
-results compare a real PostgreSQL catalog before and after indexing, not the earlier
-external-provider aggregator. There are no artificial delays or forced query plans.
+These results compare the PostgreSQL catalog before and after indexing. The measured
+baseline excludes external-provider aggregation, artificial delays and forced query
+plans.
 
 | Search (50 results) | Direct SQL before median / p95 | Direct SQL after median / p95 | HTTP before median / p95 | HTTP after median / p95 | HTTP median gain |
 |---|---:|---:|---:|---:|---:|

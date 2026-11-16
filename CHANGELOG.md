@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-16 — Performance report scope
+
+Author: Mathew Joseph · Commit reference: `af44eaa` (base)
+
+- Clarify that the performance comparison measures the local PostgreSQL catalog
+  under the documented workload and excludes external-provider aggregation.
+- Keep the report focused on recorded measurements and reproducible conditions.
+
 ## 2026-11-16 — Indexed catalog search and measured performance
 
 Author: Mathew Joseph · Commit reference: `3de90d4` (base)
