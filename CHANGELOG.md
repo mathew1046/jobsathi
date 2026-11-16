@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-16 — Implementation overview and benchmark provenance
+
+Author: Mathew Joseph · Commit reference: `f7fb96a` (base)
+
+- Document persistence, catalog search, migrations, index design, verification, and rollout in a consolidated implementation overview.
+- Make the synthetic origin of all 300,000 benchmark listings explicit in the overview, README, and performance report.
+
 ## 2026-11-16 — Frontend-compatible matching and verified final-code performance
 
 Author: Mathew Joseph · Commit reference: `925429d` (base)

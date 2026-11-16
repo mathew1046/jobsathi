@@ -2,6 +2,11 @@
 
 Measured on **2026-11-16**, authored by **Mathew Joseph**.
 
+**Dataset provenance:** all 300,000 listings were generated locally by
+`backend/benchmarks/seed.sql`. They are synthetic fixtures, not real vacancies or
+scraped job-board records. The SQL and HTTP measurements are real executions on
+that fixture; they do not measure production traffic.
+
 ## Final-code outcome
 
 The realistic frontend profile search improved from **55.965 ms to 3.329 ms HTTP median
