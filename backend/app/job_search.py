@@ -71,11 +71,11 @@ def generate_keywords(profile: Dict[str, Any]) -> List[str]:
     keywords = {k for k in keywords if k and isinstance(k, str) and k.lower() not in ['null', 'none', 'n/a', '']}
     
     # Prioritize role and skills, limit total to avoid too many API calls
-    keyword_list = list(keywords)
+    keyword_list = sorted(keywords)
     # Put role first if it exists
-    if role and role in keyword_list:
-        keyword_list.remove(role)
-        keyword_list.insert(0, role)
+    if role and role.strip() in keyword_list:
+        keyword_list.remove(role.strip())
+        keyword_list.insert(0, role.strip())
     
     return keyword_list[:8]  # Increased from 5 to 8 for better coverage
 

@@ -1,0 +1,153 @@
+[
+  {
+    "Plan": {
+      "Node Type": "Limit",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Startup Cost": 53202.77,
+      "Total Cost": 53208.71,
+      "Plan Rows": 51,
+      "Plan Width": 683,
+      "Actual Startup Time": 63.552,
+      "Actual Total Time": 66.348,
+      "Actual Rows": 51.0,
+      "Actual Loops": 1,
+      "Disabled": false,
+      "Shared Hit Blocks": 15915,
+      "Shared Read Blocks": 34175,
+      "Shared Dirtied Blocks": 0,
+      "Shared Written Blocks": 0,
+      "Local Hit Blocks": 0,
+      "Local Read Blocks": 0,
+      "Local Dirtied Blocks": 0,
+      "Local Written Blocks": 0,
+      "Temp Read Blocks": 0,
+      "Temp Written Blocks": 0,
+      "Plans": [
+        {
+          "Node Type": "Gather Merge",
+          "Parent Relationship": "Outer",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Startup Cost": 53202.77,
+          "Total Cost": 53330.53,
+          "Plan Rows": 1097,
+          "Plan Width": 683,
+          "Actual Startup Time": 63.548,
+          "Actual Total Time": 66.209,
+          "Actual Rows": 51.0,
+          "Actual Loops": 1,
+          "Disabled": false,
+          "Workers Planned": 2,
+          "Workers Launched": 2,
+          "Shared Hit Blocks": 15915,
+          "Shared Read Blocks": 34175,
+          "Shared Dirtied Blocks": 0,
+          "Shared Written Blocks": 0,
+          "Local Hit Blocks": 0,
+          "Local Read Blocks": 0,
+          "Local Dirtied Blocks": 0,
+          "Local Written Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0,
+          "Plans": [
+            {
+              "Node Type": "Sort",
+              "Parent Relationship": "Outer",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Startup Cost": 52202.75,
+              "Total Cost": 52203.89,
+              "Plan Rows": 457,
+              "Plan Width": 683,
+              "Actual Startup Time": 60.787,
+              "Actual Total Time": 60.845,
+              "Actual Rows": 40.0,
+              "Actual Loops": 3,
+              "Disabled": false,
+              "Sort Key": [
+                "posted_at DESC",
+                "id DESC"
+              ],
+              "Sort Method": "top-N heapsort",
+              "Sort Space Used": 113,
+              "Sort Space Type": "Memory",
+              "Shared Hit Blocks": 15915,
+              "Shared Read Blocks": 34175,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0,
+              "Workers": [
+                {
+                  "Worker Number": 0,
+                  "Sort Method": "top-N heapsort",
+                  "Sort Space Used": 117,
+                  "Sort Space Type": "Memory"
+                },
+                {
+                  "Worker Number": 1,
+                  "Sort Method": "top-N heapsort",
+                  "Sort Space Used": 112,
+                  "Sort Space Type": "Memory"
+                }
+              ],
+              "Plans": [
+                {
+                  "Node Type": "Seq Scan",
+                  "Parent Relationship": "Outer",
+                  "Parallel Aware": true,
+                  "Async Capable": false,
+                  "Relation Name": "jobs",
+                  "Alias": "jobs",
+                  "Startup Cost": 0.0,
+                  "Total Cost": 52187.5,
+                  "Plan Rows": 457,
+                  "Plan Width": 683,
+                  "Actual Startup Time": 0.627,
+                  "Actual Total Time": 59.906,
+                  "Actual Rows": 358.67,
+                  "Actual Loops": 3,
+                  "Disabled": false,
+                  "Filter": "(is_active AND (search_document @@ '''plumber'''::tsquery) AND (country_code = 'IN'::text) AND (city_key = 'pune'::text))",
+                  "Rows Removed by Filter": 99641,
+                  "Shared Hit Blocks": 15825,
+                  "Shared Read Blocks": 34175,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0,
+                  "Workers": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {},
+    "Planning": {
+      "Shared Hit Blocks": 0,
+      "Shared Read Blocks": 0,
+      "Shared Dirtied Blocks": 0,
+      "Shared Written Blocks": 0,
+      "Local Hit Blocks": 0,
+      "Local Read Blocks": 0,
+      "Local Dirtied Blocks": 0,
+      "Local Written Blocks": 0,
+      "Temp Read Blocks": 0,
+      "Temp Written Blocks": 0
+    },
+    "Planning Time": 0.107,
+    "Triggers": [],
+    "Execution Time": 66.443
+  }
+]

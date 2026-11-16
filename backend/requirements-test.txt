@@ -1,0 +1,3 @@
+-r app/requirements-core.txt
+pytest>=8.0,<10
+ruff>=0.9,<1

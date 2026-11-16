@@ -1,37 +1,18 @@
-# Multi-stage build for JobSathi Backend
-FROM python:3.10-slim as base
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libsndfile1 \
-    ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set working directory
+FROM python:3.12-slim AS core
 WORKDIR /app
-
-# Copy requirements and install Python dependencies
-COPY backend/app/requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --default-timeout=200 --retries 10 -r requirements.txt
-
-# Copy application code
-COPY backend/app /app
-
-# Create database directory
-RUN mkdir -p /app/database
-
-# Expose port
+ENV PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+COPY backend/app/requirements*.txt /app/app/
+RUN pip install --no-cache-dir -r app/requirements-core.txt
+COPY backend/app /app/app
+RUN mkdir -p /app/app/database
 EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8000/health', timeout=5).raise_for_status()"
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')"
-
-# Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-
-ENV PIP_DEFAULT_TIMEOUT=200
-ENV PIP_RETRIES=10
-ENV PIP_PROGRESS_BAR=off
+# The default image preserves voice/LLM functionality. The core target is sufficient
+# for catalog ingestion/search, durable sessions, and database integration tests.
+FROM core AS full
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential libsndfile1 ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir -r app/requirements.txt

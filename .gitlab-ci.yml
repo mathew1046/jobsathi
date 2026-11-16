@@ -1,4 +1,5 @@
 stages:
+  - test
   - build
   - security
   - deploy
@@ -11,6 +12,25 @@ cache:
   key: ${CI_COMMIT_REF_SLUG}
   paths:
     - frontend/node_modules/
+
+# Real PostgreSQL integration, using a native local process rather than Docker-in-Docker.
+test:backend:
+  stage: test
+  image: python:3.12-slim
+  cache: []
+  variables:
+    TEST_DATABASE_URL: postgresql://jobsathi:jobsathi@127.0.0.1:5432/jobsathi_test
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends postgresql
+    - service postgresql start
+    - runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "CREATE ROLE jobsathi LOGIN PASSWORD 'jobsathi';"
+    - runuser -u postgres -- createdb -O jobsathi jobsathi_test
+    - pip install -r backend/requirements-test.txt
+  script:
+    - cd backend
+    - python -m ruff check app/persistence.py app/job_catalog.py app/import_jobs.py app/migrate.py tests benchmarks
+    - python -m compileall -q app
+    - python -m pytest -q
 
 # 1. Build Frontend
 build:frontend:
@@ -80,6 +100,7 @@ deploy:backend:
     
     # Sync backend files to clone directory
     - cp -r backend/* hf_space/
+    - cp Dockerfile.hf hf_space/Dockerfile
     - cd hf_space
     
     # Xet / LFS setup

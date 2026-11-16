@@ -10,6 +10,9 @@ backend/app/database/
 # Allow frontend translation bundles
 !frontend/src/constants/ui_strings.json
 !frontend/src/constants/lang/*.json
+!backend/examples/*.json
+!backend/benchmarks/results/*.json
+.ruff_cache/
 *.pdf
 
 # C extensions

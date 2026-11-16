@@ -1,6 +1,31 @@
-version: "3.8"
-
 services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: jobsathi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jobsathi}
+      POSTGRES_DB: jobsathi
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobsathi -d jobsathi"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: core
+    environment:
+      DATABASE_URL: postgresql://jobsathi:${POSTGRES_PASSWORD:-jobsathi}@postgres:5432/jobsathi
+    command: ["python", "-m", "app.migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   backend:
     build:
       context: .
@@ -9,16 +34,19 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend/app:/app
-      - ./backend/app/database:/app/database
+      - resume_data:/app/app/database
       - model_cache:/root/.cache/huggingface
     env_file:
       - ./backend/.env
     environment:
-      - PYTHONUNBUFFERED=1
+      PYTHONUNBUFFERED: "1"
+      DATABASE_URL: postgresql://jobsathi:${POSTGRES_PASSWORD:-jobsathi}@postgres:5432/jobsathi
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5).raise_for_status()"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -45,3 +73,5 @@ services:
 
 volumes:
   model_cache:
+  postgres_data:
+  resume_data:

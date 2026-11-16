@@ -1,0 +1,14 @@
+[
+  {
+    "title": "Delivery Driver",
+    "company": "Example Logistics (demo)",
+    "location": "Bengaluru, Karnataka",
+    "city": "Bengaluru",
+    "country_code": "IN",
+    "source": "Local demonstration fixture",
+    "url": "https://example.invalid/jobs/delivery-driver",
+    "description": "Demonstration listing only. Delivery driver with a valid licence and customer communication skills.",
+    "salary": "24000/month",
+    "posted_at": "2026-11-01T00:00:00Z"
+  }
+]

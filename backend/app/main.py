@@ -5,17 +5,16 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
+from contextlib import asynccontextmanager
 from pydantic import BaseModel
 import tempfile
 import os
 import asyncio
-import torch
-import torchaudio
-from transformers import AutoModel
 import httpx
 from typing import List, Dict, Any, Optional
 import json
-import google.generativeai as genai
 from datetime import datetime
 import uuid
 from reportlab.lib.pagesizes import letter
@@ -24,14 +23,36 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
-from app.job_search import search_jobs
+from app.job_catalog import router as job_router
+from app.persistence import create_pool, PoolDep, SessionRepository
+from psycopg import OperationalError
+from psycopg_pool import PoolTimeout, TooManyRequests
 from dotenv import load_dotenv
 from fastapi.responses import Response
 
 # Load environment variables
 load_dotenv()
 
-app = FastAPI(title="JobSathi API - Resume Builder", version="6.0.0")
+@asynccontextmanager
+async def lifespan(app):
+    pool = create_pool()
+    try:
+        await run_in_threadpool(pool.open, wait=True, timeout=10)
+        app.state.pool = pool
+        yield
+    finally:
+        await run_in_threadpool(pool.close)
+
+
+app = FastAPI(title="JobSathi API - Resume Builder", version="6.1.0", lifespan=lifespan)
+app.include_router(job_router)
+
+
+@app.exception_handler(OperationalError)
+@app.exception_handler(PoolTimeout)
+@app.exception_handler(TooManyRequests)
+async def database_unavailable(request, exc):
+    return JSONResponse(status_code=503, content={"detail": "Database temporarily unavailable"})
 
 # CORS
 app.add_middleware(
@@ -44,23 +65,18 @@ app.add_middleware(
 )
 
 # Mount audio files
-app.mount("/audio", StaticFiles(directory="app/audio_files"), name="audio")
+app.mount("/audio", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "audio_files"), check_dir=False), name="audio")
 
 # Load configuration from environment
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY not found in environment variables")
 
 ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "ai4bharat/indic-conformer-600m-multilingual")
 DEVICE_CONFIG = os.getenv("DEVICE", "auto")
-DEVICE = "cuda" if DEVICE_CONFIG == "auto" and torch.cuda.is_available() else "cpu"
+DEVICE = "cpu" if DEVICE_CONFIG == "auto" else DEVICE_CONFIG
 
 # Database directory for storing responses
-DATABASE_DIR = os.path.join(os.path.dirname(__file__), "database")
+DATABASE_DIR = os.getenv("RESUME_STORAGE_DIR", os.path.join(os.path.dirname(__file__), "database"))
 os.makedirs(DATABASE_DIR, exist_ok=True)
-
-# Configure Gemini
-genai.configure(api_key=GEMINI_API_KEY)
 
 # Configuration for Gemma (text-only, JSON-friendly)
 GENERATION_CONFIG = {
@@ -72,19 +88,13 @@ GENERATION_CONFIG = {
 
 # Initialize the model
 # Switched to gemma-3-27b-it to avoid 429s on flash endpoints
-model = genai.GenerativeModel(
-    model_name="gemma-3-27b-it",
-    generation_config=GENERATION_CONFIG,
-)
+model = None  # Created on first LLM use; catalog/session routes need no AI credentials.
 
 # -----------------------
 # Globals and locks
 # -----------------------
 _asr_model = None
 asr_lock = asyncio.Lock()
-
-# Session storage: {session_id: {"responses": [], "metadata": {}}}
-session_storage = {}
 
 # Language maps
 LANGUAGE_NAME = {
@@ -106,6 +116,8 @@ LANGUAGE_NAME = {
 # Utility functions
 # -----------------------
 def preprocess_audio(waveform, sample_rate, target_sr=16000):
+    import torch
+    import torchaudio
     # convert to mono
     if waveform.ndim > 1:
         waveform = waveform.mean(dim=0, keepdim=True)
@@ -126,15 +138,21 @@ def preprocess_audio(waveform, sample_rate, target_sr=16000):
 # ASR model lifecycle
 # -----------------------
 async def load_asr_model():
-    global _asr_model
+    import torch
+    from transformers import AutoModel
+
+    global _asr_model, DEVICE
     async with asr_lock:
         if _asr_model is None:
+            if DEVICE_CONFIG == "auto":
+                DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
             print("Loading ASR model...")
             _asr_model = AutoModel.from_pretrained(ASR_MODEL_ID, trust_remote_code=True).to(DEVICE)
             print("ASR model loaded")
     return _asr_model
 
 def unload_asr_model():
+    import torch
     global _asr_model
     if _asr_model:
         print("Unloading ASR model to free memory")
@@ -143,10 +161,11 @@ def unload_asr_model():
         torch.cuda.empty_cache()
 
 async def run_asr(audio_tensor, source_lang):
+    import torch
     model = await load_asr_model()
     try:
         with torch.inference_mode():
-            out = model(audio_tensor, source_lang, "rnnt")
+            out = model(audio_tensor.to(DEVICE), source_lang, "rnnt")
             if isinstance(out, dict):
                 return out.get("text", "").strip()
             return str(out).strip()
@@ -157,6 +176,7 @@ async def run_asr(audio_tensor, source_lang):
 # Audio loader helper
 # -----------------------
 def save_temp_file_and_load(audio_bytes, filename_hint):
+    import torchaudio
     tmp_path = None
     with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename_hint)[1] or ".wav") as tmp:
         tmp.write(audio_bytes)
@@ -198,7 +218,7 @@ async def transcribe(audio: UploadFile = File(...), source_language: str = Form(
         waveform = preprocess_audio(waveform, sr)
         print(f"Preprocessed waveform shape: {waveform.shape}")
 
-        transcript = await run_asr(waveform.to(DEVICE), source_language)
+        transcript = await run_asr(waveform, source_language)
         print(f"ASR transcript: {transcript}")
 
         if not transcript:
@@ -401,6 +421,14 @@ def validate_and_clean_data(data: Dict[str, Any], user_text: str = "") -> Dict[s
 
 async def call_gemini(prompt: str, system_message: str = "You are a strict data extraction tool. Extract ONLY what is explicitly stated. NEVER fabricate, invent, or assume information. convert the user statement to formal text without assuming anything") -> Dict[str, Any]:
     """Call Gemini API with given prompt and return JSON response."""
+    global model
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY is required for resume generation")
+    if model is None:
+        import google.generativeai as genai
+
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel(model_name="gemma-3-27b-it", generation_config=GENERATION_CONFIG)
     try:
         # Combine system message and prompt as Gemini 1.5 Flash handles context well
         full_prompt = f"System: {system_message}\n\nUser: {prompt}"
@@ -433,21 +461,14 @@ async def call_gemini(prompt: str, system_message: str = "You are a strict data 
         raise HTTPException(status_code=500, detail=f"LLM API failed: {str(e)}")
 
 @app.post("/start_session")
-async def start_session():
+def start_session(pool: PoolDep):
     """Create a new session for the user."""
-    session_id = str(uuid.uuid4())
-    session_storage[session_id] = {
-        "responses": [],
-        "metadata": {
-            "created_at": datetime.now().isoformat(),
-            "completed": False
-        }
-    }
+    session_id = SessionRepository(pool).create()
     print(f"Created session: {session_id}")
     return {"status": "success", "session_id": session_id}
 
 @app.post("/ask_llm")
-async def ask_llm(payload: Dict[str, Any] = Body(...)):
+async def ask_llm(pool: PoolDep, payload: Dict[str, Any] = Body(...)):
     """
     Accepts transcript and question, sends to LLM, returns structured JSON.
     Stores response in session.
@@ -459,8 +480,12 @@ async def ask_llm(payload: Dict[str, Any] = Body(...)):
     field = payload.get("field", "answer")
     question_id = payload.get("question_id", 0)
     
-    if not session_id or session_id not in session_storage:
+    repository = SessionRepository(pool)
+    session = await run_in_threadpool(repository.get, session_id)
+    if not session:
         raise HTTPException(status_code=400, detail="Invalid or missing session_id")
+    if session["profile"] is not None:
+        raise HTTPException(status_code=409, detail="Session already completed")
     
     if not transcript:
         raise HTTPException(status_code=400, detail="Transcript is required")
@@ -511,8 +536,8 @@ Return ONLY valid JSON. No explanations, no markdown, no extra text."""
         "timestamp": datetime.now().isoformat()
     }
     
-    session_storage[session_id]["responses"].append(response_data)
-    print(f"Added response to session {session_id}, total: {len(session_storage[session_id]['responses'])}")
+    if not await run_in_threadpool(repository.append_response, session_id, response_data):
+        raise HTTPException(status_code=409, detail="Session already completed")
 
     return {
         "status": "success",
@@ -726,17 +751,19 @@ def generate_ats_resume_pdf(profile: Dict[str, Any], output_path: str):
     print(f"PDF generated: {output_path}")
 
 @app.post("/build_profile")
-async def build_profile(payload: Dict[str, Any] = Body(...)):
+async def build_profile(pool: PoolDep, payload: Dict[str, Any] = Body(...)):
     """
     Builds final profile from session data, generates ATS resume PDF.
     Payload: { "session_id": "..." }
     """
     session_id = payload.get("session_id")
     
-    if not session_id or session_id not in session_storage:
+    repository = SessionRepository(pool)
+    session_data = await run_in_threadpool(repository.get, session_id)
+    if not session_data:
         raise HTTPException(status_code=400, detail="Invalid or missing session_id")
-    
-    session_data = session_storage[session_id]
+    if session_data["profile"] is not None:
+        return {"status": "success", "profile": session_data["profile"], "pdf_filename": session_data["pdf_filename"]}
     responses = session_data["responses"]
     
     if not responses:
@@ -850,7 +877,8 @@ NOTES:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         raw_name = cleaned_result.get("name")
         safe_name = str(raw_name or "unknown")
-        safe_name = safe_name.replace(" ", "_").replace("/", "_")
+        safe_name = "".join(c if c.isalnum() else "_" for c in safe_name)[:80]
+        safe_name = f"{safe_name}_{session_id}"
         
         # Save complete session JSON
         json_filename = os.path.join(DATABASE_DIR, f"session_{timestamp}_{safe_name}.json")
@@ -863,10 +891,10 @@ NOTES:
         generate_ats_resume_pdf(cleaned_result, pdf_filename)
         print(f"Generated PDF resume: {pdf_filename}")
         
-        # Clean up session from memory
-        del session_storage[session_id]
-        print(f"Cleaned up session: {session_id}")
-        
+        await run_in_threadpool(repository.complete, session_id, cleaned_result, os.path.basename(pdf_filename))
+
+    except (OperationalError, PoolTimeout, TooManyRequests):
+        raise  # Preserve the API's sanitized 503 response for persistence failures.
     except Exception as e:
         print(f"Failed to save session/PDF: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate resume: {str(e)}")
@@ -885,38 +913,15 @@ async def download_resume(filename: str):
         raise HTTPException(status_code=404, detail="Resume not found")
     return FileResponse(filepath, media_type='application/pdf', filename=filename)
 
-@app.post("/search_jobs")
-async def search_jobs_endpoint(payload: Dict[str, Any] = Body(...)):
-    """
-    Search for relevant jobs based on user profile.
-    Payload: { "profile": {...} }
-    Returns: { "status": "success", "jobs": [...], "count": 25 }
-    """
-    profile = payload.get("profile")
-    
-    if not profile:
-        raise HTTPException(status_code=400, detail="Profile data is required")
-    
-    try:
-        # Search jobs using the job_search module
-        jobs = search_jobs(profile, min_score=3)
-        
-        return {
-            "status": "success",
-            "jobs": jobs,
-            "count": len(jobs)
-        }
-    except Exception as e:
-        print(f"Job search error: {e}")
-        raise HTTPException(status_code=500, detail=f"Job search failed: {str(e)}")
-
 @app.get("/")
 async def root():
-    return {"message": "JobSathi API - Resume Builder", "version": "6.0.0", "docs": "/docs"}
+    return {"message": "JobSathi API - Resume Builder", "version": "6.1.0", "docs": "/docs"}
 
 @app.get("/health")
-async def health_check():
-    return {"status": "healthy", "service": "JobSathi API"}
+def health_check(pool: PoolDep):
+    with pool.connection() as conn:
+        conn.execute("SELECT 1")
+    return {"status": "healthy", "service": "JobSathi API", "database": "postgresql"}
 
 @app.get("/languages")
 def list_languages():

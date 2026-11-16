@@ -2,6 +2,10 @@
 
 JobSathi is an intelligent voice-driven resume builder that supports **17+ Indian languages** with ASR (Automatic Speech Recognition), English translation, and ATS-optimized PDF resume generation. It also includes job search integration across multiple platforms.
 
+**PostgreSQL setup, API contract, migrations, imports and performance reproduction:**
+`docs/POSTGRESQL.md`. Job search now reads a persistent catalog; configure `DATABASE_URL`
+and import listings before searching. Interview sessions also survive backend restarts.
+
 ## 🌟 Features
 
 ### Core Features
@@ -10,14 +14,14 @@ JobSathi is an intelligent voice-driven resume builder that supports **17+ India
 - **🌐 Multilingual ASR** - AI4Bharat's Indic Conformer model for accurate transcription
 - **🔄 Auto Translation** - Converts all answers to English using Google Gemini
 - **📄 ATS Resume Generation** - Creates professional PDF resumes optimized for Applicant Tracking Systems
-- **🔍 Smart Job Search** - Finds relevant jobs from Adzuna, Jooble, and Google Jobs
+- **🔍 Smart Job Search** - Searches a PostgreSQL catalog refreshed from Adzuna, Jooble, Google Jobs or JSON imports
 - **💾 Session-Based Storage** - Saves complete conversation history and resume data
 - **🎨 Modern Dark UI** - Stunning responsive interface with dark mode
 
 ### Technical Features
 - Real-time audio waveform visualization during recording
 - Audio playback and re-record functionality
-- Session-based data persistence (single JSON per user)
+- PostgreSQL session/profile persistence with JSON exports and PDF storage
 - Multi-source job aggregation with relevance scoring
 - Duplicate job detection and removal
 - LLM-powered data extraction (no fake data generation)
@@ -62,7 +66,8 @@ jobsathi/
 ## 🚀 Quick Start
 
 ### Prerequisites
-- **Python 3.8+** (3.10+ recommended)
+- **Python 3.10+** (3.12 recommended)
+- **PostgreSQL 15+** (18 used for measured verification)
 - **Node.js 16+** with npm
 - **Git**
 - **Windows**: PowerShell or Command Prompt
@@ -70,6 +75,10 @@ jobsathi/
 - **OR Docker** (for containerized deployment)
 
 ### Installation (Standard)
+
+Use the current native setup in `docs/POSTGRESQL.md`. The historical convenience-script
+examples below are retained for older installations; those scripts are not shipped in
+this checkout. Run `python -m app.migrate` from `backend` before starting `app.main:app`.
 
 #### Windows
 ```cmd
@@ -153,7 +162,8 @@ docker-compose up -d --build
 
 ### Job Search
 - `POST /search_jobs` - Find relevant jobs based on profile
-- Returns: `{ jobs: [...], count: N }`
+- Returns: `{ status: "success", jobs: [...], count: N, next_cursor: null | "..." }`
+- Optional `limit`, `cursor` and `country_code` fields; existing `{profile}` requests work
 
 ### Utility
 - `GET /languages` - List all supported languages
@@ -167,11 +177,16 @@ docker-compose up -d --build
 
 **Required:**
 ```env
+DATABASE_URL=postgresql://jobsathi:jobsathi@127.0.0.1:5432/jobsathi
+```
+
+**Required for LLM interview/resume generation:**
+```env
 GEMINI_API_KEY=your_gemini_api_key_here
 ```
 Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
 
-**Optional (Job Search):**
+**Optional (scheduled job imports):**
 ```env
 ADZUNA_APP_ID=your_app_id
 ADZUNA_APP_KEY=your_app_key
@@ -201,7 +216,8 @@ VITE_API_BASE_URL=http://localhost:8000
 | **Jooble** | Job search | [jooble.org/api/about](https://jooble.org/api/about) | ✅ Yes |
 | **SerpAPI** | Google Jobs | [serpapi.com](https://serpapi.com/) | ⚠️ Limited |
 
-**Note:** Only GEMINI_API_KEY is required. Job search works with any combination of the optional APIs.
+**Note:** Catalog search requires PostgreSQL and imported jobs, but no external API keys.
+Provider keys are used by `python -m app.import_jobs`, outside the search request path.
 
 ## 📝 Resume Questions
 
@@ -240,7 +256,8 @@ source venv/bin/activate  # Linux/Mac
 venv\Scripts\activate     # Windows
 
 # Run with auto-reload
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+python -m app.migrate
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Frontend Development
@@ -270,6 +287,7 @@ See [DOCKER.md](DOCKER.md) for complete Docker documentation.
 ```bash
 # Backend
 cd backend
+export TEST_DATABASE_URL=postgresql://jobsathi:jobsathi@127.0.0.1:5432/jobsathi_test
 pytest
 
 # Frontend
@@ -288,6 +306,7 @@ npm test
 - ReportLab - PDF generation
 - Requests - HTTP client
 - Feedparser - RSS parsing
+- Psycopg 3 - PostgreSQL access and bounded connection pooling
 
 ### Frontend
 - React - UI framework
@@ -296,9 +315,9 @@ npm test
 
 ## 🔒 Privacy & Data Storage
 
-- All user data stored locally in `backend/app/database/`
-- Session files: `session_TIMESTAMP_NAME.json`
-- PDF resumes: `resume_TIMESTAMP_NAME.pdf`
+- Sessions, answers and final profile metadata are stored in PostgreSQL
+- JSON exports and PDFs remain in `backend/app/database/` or `RESUME_STORAGE_DIR`
+- Filenames include the session UUID to avoid collisions
 - Database folder excluded from git
 - **Environment files (`.env`) are excluded from git for security**
 - API keys stored in `.env` files, never in code
@@ -363,9 +382,9 @@ taskkill /PID <PID> /F
 - Model cached in `~/.cache/huggingface/`
 
 ### Job search returns no results
-- Verify API keys in `backend/app/job_search.py`
-- Check internet connection
-- Some free APIs have rate limits
+- Check database readiness with `/health` and apply migrations
+- Import jobs with `python -m app.import_jobs --file /path/to/jobs.json`
+- Verify canonical city/country, active status and keyword matches; see `docs/POSTGRESQL.md`
 
 ## 📄 License
 
@@ -406,4 +425,3 @@ For issues and questions:
 ---
 
 **Built with ❤️ for job seekers across India**
-

@@ -5,6 +5,8 @@ __pycache__
 *.so
 .Python
 venv/
+.venv/
+frontend/node_modules/
 env/
 ENV/
 *.egg-info/
@@ -28,6 +30,8 @@ Thumbs.db
 # Database
 database/*.json
 database/*.pdf
+backend/app/database/
+backend/benchmarks/results/
 
 # Environment
 .env
