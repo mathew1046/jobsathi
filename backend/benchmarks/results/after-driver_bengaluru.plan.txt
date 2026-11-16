@@ -1,0 +1,12 @@
+Limit  (cost=0.42..612.62 rows=51 width=683) (actual time=0.025..0.394 rows=51.00 loops=1)
+  Buffers: shared hit=294
+  ->  Index Scan using jobs_active_city_recent_idx on jobs  (cost=0.42..25628.59 rows=2135 width=683) (actual time=0.022..0.264 rows=51.00 loops=1)
+        Index Cond: ((country_code = 'IN'::text) AND (city_key = 'bengaluru'::text))
+        Filter: (search_document @@ '''driver'''::tsquery)
+        Rows Removed by Filter: 238
+        Index Searches: 1
+        Buffers: shared hit=294
+Planning:
+  Buffers: shared hit=1
+Planning Time: 0.105 ms
+Execution Time: 0.471 ms

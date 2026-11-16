@@ -1,0 +1,22 @@
+[
+  {
+    "name": "jobs_active_city_recent_idx",
+    "bytes": 13557760
+  },
+  {
+    "name": "jobs_active_country_recent_idx",
+    "bytes": 10977280
+  },
+  {
+    "name": "jobs_active_search_document_idx",
+    "bytes": 8216576
+  },
+  {
+    "name": "jobs_identity_key_key",
+    "bytes": 22798336
+  },
+  {
+    "name": "jobs_pkey",
+    "bytes": 6758400
+  }
+]

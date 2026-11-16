@@ -1,0 +1,12 @@
+Limit  (cost=0.42..1241.16 rows=51 width=683) (actual time=0.047..0.601 rows=51.00 loops=1)
+  Buffers: shared hit=534
+  ->  Index Scan using jobs_active_city_recent_idx on jobs  (cost=0.42..25471.97 rows=1047 width=683) (actual time=0.044..0.492 rows=51.00 loops=1)
+        Index Cond: ((country_code = 'IN'::text) AND (city_key = 'pune'::text))
+        Filter: (search_document @@ '''plumber'''::tsquery)
+        Rows Removed by Filter: 477
+        Index Searches: 1
+        Buffers: shared hit=534
+Planning:
+  Buffers: shared hit=1
+Planning Time: 0.102 ms
+Execution Time: 0.670 ms

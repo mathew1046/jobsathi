@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-16 — Indexed catalog search and measured performance
+
+Author: Mathew Joseph · Commit reference: `3de90d4` (base)
+
+- Add active-only city/country composite recency indexes and a full-text GIN index after
+  committing the genuine 300,000-listing PostgreSQL baseline.
+- Identical primary HTTP search improves 55.400 → 3.190 ms median (17.37×), p95
+  71.892 → 4.650 ms; publish raw samples, explain plans, hardware, costs and limitations.
+- Preserve identical query/data/result fingerprints and verify the integration suite
+  with indexed migrations; no artificial delays or planner forcing.
+
 ## 2026-11-16 — PostgreSQL persistence and measured search baseline
 
 Author: Mathew Joseph · Commit reference: `0e4c8eb` (base)

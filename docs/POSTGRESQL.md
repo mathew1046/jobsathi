@@ -158,7 +158,7 @@ queries or controlled settings. Warmup defaults to 10; measured requests to 100 
 query/path, one request at a time, alternating direct SQL and real HTTP. No artificial
 delay, cache eviction, planner forcing or provider latency is included. Avoid other
 builds/imports/load tests during both runs. See `backend/benchmarks/results` for evidence
-and the performance report for conclusions and limitations.
+and `docs/PERFORMANCE.md` for conclusions and limitations.
 
 ## Deployment notes
 

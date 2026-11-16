@@ -1,0 +1,18 @@
+Limit  (cost=4822.37..4822.50 rows=51 width=683) (actual time=0.038..0.046 rows=0.00 loops=1)
+  Buffers: shared hit=8
+  ->  Sort  (cost=4822.37..4822.53 rows=64 width=683) (actual time=0.034..0.040 rows=0.00 loops=1)
+        Sort Key: posted_at DESC, id DESC
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=8
+        ->  Bitmap Heap Scan on jobs  (cost=117.76..4820.45 rows=64 width=683) (actual time=0.013..0.017 rows=0.00 loops=1)
+              Recheck Cond: ((search_document @@ '''astronaut'''::tsquery) AND is_active)
+              Filter: ((country_code = 'IN'::text) AND (city_key = 'bengaluru'::text))
+              Buffers: shared hit=2
+              ->  Bitmap Index Scan on jobs_active_search_document_idx  (cost=0.00..117.74 rows=1351 width=0) (actual time=0.006..0.007 rows=0.00 loops=1)
+                    Index Cond: (search_document @@ '''astronaut'''::tsquery)
+                    Index Searches: 1
+                    Buffers: shared hit=2
+Planning:
+  Buffers: shared hit=232 read=2
+Planning Time: 0.531 ms
+Execution Time: 0.080 ms

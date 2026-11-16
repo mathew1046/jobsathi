@@ -1,0 +1,8 @@
+{
+  "started_at": "2026-11-16T08:09:24.450702+00:00",
+  "finished_at": "2026-11-16T08:09:26.062638+00:00",
+  "elapsed_seconds": 1.6119704449999972,
+  "applied": [
+    "002_job_search_indexes.sql"
+  ]
+}
