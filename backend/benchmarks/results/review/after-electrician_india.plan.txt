@@ -1,0 +1,12 @@
+Limit  (cost=0.42..347.09 rows=51 width=687) (actual time=0.024..0.567 rows=51.00 loops=1)
+  Buffers: shared hit=563
+  ->  Index Scan using jobs_active_country_recent_idx on jobs  (cost=0.42..141870.03 rows=20871 width=687) (actual time=0.021..0.444 rows=51.00 loops=1)
+        Index Cond: (country_code = 'IN'::text)
+        Filter: (search_document @@ '''electrician'''::tsquery)
+        Rows Removed by Filter: 507
+        Index Searches: 1
+        Buffers: shared hit=563
+Planning:
+  Buffers: shared hit=1
+Planning Time: 0.090 ms
+Execution Time: 0.645 ms

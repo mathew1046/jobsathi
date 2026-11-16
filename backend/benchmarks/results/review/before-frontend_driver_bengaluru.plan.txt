@@ -1,0 +1,20 @@
+Limit  (cost=53218.62..53237.43 rows=51 width=687) (actual time=47.634..50.585 rows=51.00 loops=1)
+  Buffers: shared hit=16086 read=34190
+  ->  Gather Merge  (cost=53218.62..54044.00 rows=2237 width=687) (actual time=47.631..50.429 rows=51.00 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=16086 read=34190
+        ->  Result  (cost=52218.59..52465.57 rows=932 width=687) (actual time=45.296..45.506 rows=42.00 loops=3)
+              Buffers: shared hit=16086 read=34190
+              ->  Sort  (cost=52218.59..52220.92 rows=932 width=683) (actual time=45.155..45.215 rows=42.00 loops=3)
+                    Sort Key: jobs.posted_at DESC, jobs.id DESC
+                    Sort Method: top-N heapsort  Memory: 105kB
+                    Buffers: shared hit=15900 read=34190
+                    Worker 0:  Sort Method: top-N heapsort  Memory: 109kB
+                    Worker 1:  Sort Method: top-N heapsort  Memory: 107kB
+                    ->  Parallel Seq Scan on jobs  (cost=0.00..52187.50 rows=932 width=683) (actual time=0.373..43.835 rows=735.67 loops=3)
+                          Filter: (is_active AND (search_document @@ '''driver'''::tsquery) AND (country_code = 'IN'::text) AND (city_key = 'bengaluru'::text))
+                          Rows Removed by Filter: 99264
+                          Buffers: shared hit=15810 read=34190
+Planning Time: 0.090 ms
+Execution Time: 50.675 ms

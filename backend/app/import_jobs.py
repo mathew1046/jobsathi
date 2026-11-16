@@ -4,6 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from app.job_catalog import JobInput, JobRepository
 from app.job_search import (
     ADZUNA_APP_ID,
@@ -13,9 +15,23 @@ from app.job_search import (
     fetch_adzuna,
     fetch_jooble,
     fetch_serpapi,
-    merge_results,
 )
 from app.persistence import create_pool
+
+
+def provider_jobs(records: list[dict], city: str | None = None) -> tuple[list[JobInput], dict]:
+    """Skip unusable external records explicitly; commit the validated remainder atomically."""
+    jobs, reasons = [], {}
+    for record in records:
+        record = dict(record, salary=str(record.get("salary") or "Not specified"))
+        if city:
+            record["city"] = city
+        try:
+            jobs.append(JobInput.model_validate(record))
+        except ValidationError as exc:
+            for field in {str(error["loc"][0]) for error in exc.errors()}:
+                reasons[field] = reasons.get(field, 0) + 1
+    return jobs, {"received": len(records), "skipped": len(records) - len(jobs), "skipped_reasons": reasons}
 
 
 def main():
@@ -28,6 +44,9 @@ def main():
     args = parser.parse_args()
     if args.file:
         records = json.loads(args.file.read_text(encoding="utf-8"))
+        # User-authored imports fail as a whole on invalid input, before any writes.
+        jobs = [JobInput.model_validate(record) for record in records]
+        report = {"received": len(records), "skipped": 0, "skipped_reasons": {}}
     else:
         sources = []
         if ADZUNA_APP_ID and ADZUNA_APP_KEY:
@@ -38,15 +57,10 @@ def main():
             sources.append(fetch_serpapi(args.keywords, args.location))
         if not sources:
             parser.error("No configured providers returned results; no mock listings are imported")
-        records = merge_results(*sources)
-        for record in records:
-            record["salary"] = str(record.get("salary") or "Not specified")
-            if args.city:
-                record["city"] = args.city
-    # Validate the whole import before its single transaction; failures leave no partial catalog.
-    jobs = [JobInput.model_validate(record) for record in records]
+        records = [record for source in sources for record in source]
+        jobs, report = provider_jobs(records, args.city)
     with create_pool() as pool:
-        print({"upserted": JobRepository(pool).upsert(jobs)})
+        print(json.dumps(report | {"upserted": JobRepository(pool).upsert(jobs)}))
 
 
 if __name__ == "__main__":

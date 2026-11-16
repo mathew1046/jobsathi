@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 from dotenv import load_dotenv
 from fastapi import Depends, Request
+from psycopg.conninfo import make_conninfo
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
@@ -15,9 +16,16 @@ from psycopg_pool import ConnectionPool
 def database_url() -> str:
     load_dotenv()
     url = os.getenv("DATABASE_URL")
-    if not url:
-        raise RuntimeError("DATABASE_URL is required; run python -m app.migrate before starting the API")
-    return url
+    if url:
+        return url
+    if os.getenv("PGDATABASE"):
+        # libpq escapes individual values correctly, including / @ : ' \\ and spaces.
+        fields = {key: os.environ[name] for key, name in {
+            "host": "PGHOST", "port": "PGPORT", "dbname": "PGDATABASE",
+            "user": "PGUSER", "password": "PGPASSWORD", "sslmode": "PGSSLMODE",
+        }.items() if name in os.environ}
+        return make_conninfo(**fields)
+    raise RuntimeError("DATABASE_URL or PGDATABASE is required; run python -m app.migrate before starting the API")
 
 
 def create_pool(url: str | None = None) -> ConnectionPool:

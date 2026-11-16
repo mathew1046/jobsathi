@@ -1,0 +1,20 @@
+Limit  (cost=53191.66..53210.48 rows=51 width=687) (actual time=63.085..66.172 rows=51.00 loops=1)
+  Buffers: shared hit=16086 read=34190
+  ->  Gather Merge  (cost=53191.66..61595.98 rows=22778 width=687) (actual time=63.081..66.032 rows=51.00 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=16086 read=34190
+        ->  Result  (cost=52191.64..54706.75 rows=9491 width=687) (actual time=60.660..60.840 rows=41.00 loops=3)
+              Buffers: shared hit=16086 read=34190
+              ->  Sort  (cost=52191.64..52215.37 rows=9491 width=683) (actual time=60.534..60.591 rows=41.00 loops=3)
+                    Sort Key: jobs.posted_at DESC, jobs.id DESC
+                    Sort Method: top-N heapsort  Memory: 109kB
+                    Buffers: shared hit=15900 read=34190
+                    Worker 0:  Sort Method: top-N heapsort  Memory: 119kB
+                    Worker 1:  Sort Method: top-N heapsort  Memory: 124kB
+                    ->  Parallel Seq Scan on jobs  (cost=0.00..51875.00 rows=9491 width=683) (actual time=0.162..48.501 rows=7209.67 loops=3)
+                          Filter: (is_active AND (search_document @@ '''electrician'''::tsquery) AND (country_code = 'IN'::text))
+                          Rows Removed by Filter: 92790
+                          Buffers: shared hit=15810 read=34190
+Planning Time: 0.112 ms
+Execution Time: 66.275 ms

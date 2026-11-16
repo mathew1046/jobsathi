@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-16 — Frontend-compatible matching and verified final-code performance
+
+Author: Mathew Joseph · Commit reference: `925429d` (base)
+
+- Normalize city/state and generated roles consistently; enforce role-led eligibility
+  before paging, retain scoring bonuses, and explicitly count skipped provider records.
+- Pass separate database credentials safely; 25 focused/native integration tests pass.
+- Fresh 300,000-listing baseline-first run: realistic frontend HTTP median 55.965 →
+  3.329 ms (16.81×), p95 64.462 → 3.702 ms; preserve initial evidence as history.
+
 ## 2026-11-16 — Performance report scope
 
 Author: Mathew Joseph · Commit reference: `af44eaa` (base)

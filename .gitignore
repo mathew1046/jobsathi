@@ -12,6 +12,7 @@ backend/app/database/
 !frontend/src/constants/lang/*.json
 !backend/examples/*.json
 !backend/benchmarks/results/*.json
+!backend/benchmarks/results/review/*.json
 .ruff_cache/
 *.pdf
 

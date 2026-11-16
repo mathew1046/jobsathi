@@ -5,8 +5,8 @@ JobSathi is an intelligent voice-driven resume builder that supports **17+ India
 **PostgreSQL setup, API contract, migrations, imports and performance reproduction:**
 `docs/POSTGRESQL.md`. Job search now reads a persistent catalog; configure `DATABASE_URL`
 and import listings before searching. Interview sessions also survive backend restarts.
-Measured indexing results: `docs/PERFORMANCE.md` — 300,000 listings, primary search HTTP
-median **55.400 → 3.190 ms (17.37×)**; p95 **71.892 → 4.650 ms** on the documented native setup.
+Measured indexing results: `docs/PERFORMANCE.md` — 300,000 listings, realistic frontend
+profile HTTP median **55.965 → 3.329 ms (16.81×)**; p95 **64.462 → 3.702 ms** on the documented native setup.
 
 ## 🌟 Features
 

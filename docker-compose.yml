@@ -1,3 +1,12 @@
+x-database-environment: &database-environment
+  # Keep credentials as separate values; never interpolate passwords into a URI.
+  DATABASE_URL: ""
+  PGHOST: postgres
+  PGPORT: "5432"
+  PGDATABASE: jobsathi
+  PGUSER: jobsathi
+  PGPASSWORD: ${POSTGRES_PASSWORD:-jobsathi}
+
 services:
   postgres:
     image: postgres:18
@@ -19,8 +28,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: core
-    environment:
-      DATABASE_URL: postgresql://jobsathi:${POSTGRES_PASSWORD:-jobsathi}@postgres:5432/jobsathi
+    environment: *database-environment
     command: ["python", "-m", "app.migrate"]
     depends_on:
       postgres:
@@ -39,8 +47,8 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      <<: *database-environment
       PYTHONUNBUFFERED: "1"
-      DATABASE_URL: postgresql://jobsathi:${POSTGRES_PASSWORD:-jobsathi}@postgres:5432/jobsathi
     depends_on:
       migrate:
         condition: service_completed_successfully

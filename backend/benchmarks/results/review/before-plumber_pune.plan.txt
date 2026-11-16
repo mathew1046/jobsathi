@@ -1,0 +1,20 @@
+Limit  (cost=53207.20..53226.02 rows=51 width=687) (actual time=49.765..52.800 rows=51.00 loops=1)
+  Buffers: shared hit=16086 read=34190
+  ->  Gather Merge  (cost=53207.20..53602.73 rows=1072 width=687) (actual time=49.761..52.653 rows=51.00 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=16086 read=34190
+        ->  Result  (cost=52207.18..52325.63 rows=447 width=687) (actual time=47.510..47.698 rows=42.00 loops=3)
+              Buffers: shared hit=16086 read=34190
+              ->  Sort  (cost=52207.18..52208.29 rows=447 width=683) (actual time=47.369..47.431 rows=42.00 loops=3)
+                    Sort Key: jobs.posted_at DESC, jobs.id DESC
+                    Sort Method: top-N heapsort  Memory: 111kB
+                    Buffers: shared hit=15900 read=34190
+                    Worker 0:  Sort Method: top-N heapsort  Memory: 116kB
+                    Worker 1:  Sort Method: top-N heapsort  Memory: 112kB
+                    ->  Parallel Seq Scan on jobs  (cost=0.00..52187.50 rows=447 width=683) (actual time=0.394..46.597 rows=358.67 loops=3)
+                          Filter: (is_active AND (search_document @@ '''plumber'''::tsquery) AND (country_code = 'IN'::text) AND (city_key = 'pune'::text))
+                          Rows Removed by Filter: 99641
+                          Buffers: shared hit=15810 read=34190
+Planning Time: 0.094 ms
+Execution Time: 52.888 ms

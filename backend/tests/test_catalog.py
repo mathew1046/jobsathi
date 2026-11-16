@@ -1,9 +1,12 @@
+import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from pathlib import Path
 
 import psycopg
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from app.job_catalog import JobInput, JobRepository, SearchRequest
 from app.main import app
@@ -100,6 +103,106 @@ def test_missing_keyword_and_unicode_search_return_truthful_results(pool):
     assert repository.search(SearchRequest(profile={"role": "चालक", "location": "पुणे"})).count == 1
     assert repository.search(SearchRequest(profile={"role": "Astronaut"})).count == 0
     assert repository.search(SearchRequest(profile={"location": "India"})).count == 1
+
+
+def test_generated_frontend_profile_matches_supplied_demo(pool):
+    records = json.loads((Path(__file__).parents[1] / "examples" / "jobs.json").read_text())
+    JobRepository(pool).upsert([JobInput.model_validate(record) for record in records])
+    profile = {
+        "name": "Arun Kumar", "role": "Professional Driver", "location": "Bengaluru, Karnataka",
+        "skills": ["Two Wheeler Driving", "Customer Communication"], "experience_years": 3,
+        "experience_details": [{"role": "Delivery Driver", "company": "Acme Logistics"}],
+        "education": [{"degree": "Secondary School"}], "certifications": ["Driving Licence"],
+        "languages": ["Kannada", "Hindi"],
+    }
+    with TestClient(app) as client:
+        result = client.post("/search_jobs", json={"profile": profile})
+        assert result.status_code == 200
+        data = result.json()
+        assert data["count"] == 1
+        assert data["jobs"][0]["title"] == "Delivery Driver"
+        assert data["jobs"][0]["location"] == "Bengaluru, Karnataka"
+        assert data["jobs"][0]["relevance_score"] >= 15
+        alias = client.post("/search_jobs", json={"profile": profile | {"location": "Bangalore, Karnataka, India"}}).json()
+        assert alias == data
+
+
+def test_city_normalization_is_shared_by_import_and_search(pool):
+    repository = JobRepository(pool)
+    repository.upsert([job(location="Bangalore, Karnataka, India")])
+    repository.upsert([job(location="Bengaluru, Karnataka", source="another provider")])
+    for location in ("Bengaluru", "Bengaluru, Karnataka", "  BANGALORE , Karnataka, India "):
+        result = repository.search(SearchRequest(profile={"role": "Professional Driver", "location": location}))
+        assert result.count == 1
+        assert result.jobs[0].location == "Bengaluru, Karnataka"
+    with pool.connection() as conn:
+        assert conn.execute("SELECT city_key FROM jobs").fetchall() == [{"city_key": "bengaluru"}]
+
+
+def test_role_eligibility_precedes_limit_and_ignores_previous_employer(pool):
+    repository = JobRepository(pool)
+    repository.upsert([
+        job(company=f"Warehouse {i}", title="Warehouse Helper", location="Delhi",
+            description="Acme inventory and loading work", posted_at=datetime(2026, 11, 2, tzinfo=timezone.utc))
+        for i in range(60)
+    ] + [job(company="Relevant employer", location="Delhi", description="Driver with a licence")])
+    profile = {"role": "Professional Driver", "experience_details": [{"company": "Acme"}],
+               "skills": ["inventory"], "location": "India"}
+    with TestClient(app) as client:
+        data = client.post("/search_jobs", json={"profile": profile}).json()
+    assert data["count"] == 1 and data["next_cursor"] is None
+    assert data["jobs"][0]["company"] == "Relevant employer"
+    assert data["jobs"][0]["relevance_score"] >= 15
+
+
+def test_text_eligibility_and_score_agree_without_substring_match(pool):
+    repository = JobRepository(pool)
+    repository.upsert([job(title="Driver of heavy vehicles", description="Vehicle inspections")])
+    # Terms can occur across title and description; literal phrase scoring used to give zero.
+    result = repository.search(SearchRequest(profile={"role": "Professional heavy vehicle driver"}))
+    assert result.count == 1 and result.jobs[0].relevance_score >= 7
+
+
+def test_role_and_structured_skill_fallbacks(pool):
+    repository = JobRepository(pool)
+    repository.upsert([job(), job(company="Pipes", title="Plumber", description="Pipe installation")])
+    experience = repository.search(SearchRequest(profile={"experience_details": [{"role": "Professional Driver", "company": "Pipes"}]}))
+    assert experience.count == 1 and experience.jobs[0].title == "Delivery Driver"
+    skills = repository.search(SearchRequest(profile={"skills": [{"name": "Pipe installation"}]}))
+    assert skills.count == 1 and skills.jobs[0].relevance_score >= 4
+
+
+def test_mixed_provider_import_skips_invalid_records_with_counts(pool, monkeypatch, capsys):
+    from app import import_jobs
+
+    record = job(location="Bengaluru, Karnataka").model_dump(mode="json")
+    monkeypatch.setattr(import_jobs, "ADZUNA_APP_ID", "configured")
+    monkeypatch.setattr(import_jobs, "ADZUNA_APP_KEY", "configured")
+    monkeypatch.setattr(import_jobs, "JOOBLE_KEY", "")
+    monkeypatch.setattr(import_jobs, "SERPAPI_KEY", "")
+    monkeypatch.setattr(import_jobs, "fetch_adzuna", lambda *args: [
+        record, record | {"company": "Missing application options", "url": ""},
+        record | {"company": "Broken listing", "title": "", "url": "https://"},
+    ])
+    monkeypatch.setattr("sys.argv", ["import_jobs", "--keywords", "Driver"])
+    import_jobs.main()
+    assert json.loads(capsys.readouterr().out) == {
+        "received": 3, "upserted": 1, "skipped": 2, "skipped_reasons": {"url": 2, "title": 1},
+    }
+    result = JobRepository(pool).search(SearchRequest(profile={"role": "Driver", "location": "Bengaluru"}))
+    assert result.count == 1 and result.jobs[0].company == "Example Logistics"
+
+
+def test_invalid_local_import_rejects_entire_batch(pool, monkeypatch, tmp_path):
+    from app import import_jobs
+
+    record = job().model_dump(mode="json")
+    source = tmp_path / "jobs.json"
+    source.write_text(json.dumps([record, record | {"company": "Invalid", "url": ""}]))
+    monkeypatch.setattr("sys.argv", ["import_jobs", "--file", str(source)])
+    with pytest.raises(ValidationError):
+        import_jobs.main()
+    assert JobRepository(pool).search(SearchRequest(profile={"role": "Driver"})).count == 0
 
 
 def test_sessions_survive_restart_and_concurrent_appends(pool):

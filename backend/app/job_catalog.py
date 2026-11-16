@@ -3,15 +3,17 @@
 import base64
 import hashlib
 import json
+import re
 import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, HTTPException
 from psycopg_pool import ConnectionPool
 from pydantic import BaseModel, Field, field_validator
 
-from app.job_search import generate_keywords, score_relevance
+from app.job_search import score_relevance
 from app.persistence import PoolDep
 
 router = APIRouter(tags=["jobs"])
@@ -19,6 +21,49 @@ router = APIRouter(tags=["jobs"])
 
 def normalize_location(value: str) -> str:
     return " ".join(unicodedata.normalize("NFKC", value).casefold().split())
+
+
+def normalize_city(value: str) -> str:
+    """Canonicalize city-first display strings identically at import and query time."""
+    city = normalize_location(value).split(",", 1)[0].strip()
+    aliases = {
+        "bangalore": "bengaluru", "bombay": "mumbai", "madras": "chennai",
+        "calcutta": "kolkata", "gurgaon": "gurugram", "trivandrum": "thiruvananthapuram",
+    }
+    return aliases.get(city, city)
+
+
+def normalize_role(value: str) -> str:
+    # These modifiers occur in generated resumes, but are not occupational requirements.
+    words = normalize_location(value).split()
+    words = [word for word in words if word not in {"professional", "experienced", "skilled", "qualified"}]
+    role = " ".join(words)
+    return "" if role in {"null", "none", "n/a"} else role
+
+
+def candidate_terms(profile: dict) -> tuple[list[str], str | None]:
+    """Role-led eligibility, not employer/education keyword expansion."""
+    role = normalize_role(profile.get("role") or "")
+    if role and re.search(r"\w", role):
+        return [role], "role"
+    experience = profile.get("experience_details")
+    roles = set()
+    for item in experience if isinstance(experience, list) else []:
+        if isinstance(item, dict) and isinstance(item.get("role"), str):
+            value = normalize_role(item["role"])
+            if value and re.search(r"\w", value):
+                roles.add(value)
+    if roles:
+        return sorted(roles)[:8], "role"
+    skills = profile.get("skills")
+    terms = set()
+    for skill in skills if isinstance(skills, list) else []:
+        value = skill.get("name", skill.get("skill")) if isinstance(skill, dict) else skill
+        if isinstance(value, str):
+            value = normalize_location(value)
+            if value not in {"", "null", "none", "n/a"} and re.search(r"\w", value):
+                terms.add(value)
+    return sorted(terms)[:8], "skills" if terms else None
 
 
 class JobInput(BaseModel):
@@ -46,6 +91,14 @@ class JobInput(BaseModel):
     def aware_timestamp(cls, value):
         if value.tzinfo is None:
             raise ValueError("posted_at must include a timezone")
+        return value
+
+    @field_validator("url")
+    @classmethod
+    def usable_url(cls, value):
+        parsed = urlsplit(value)
+        if not parsed.hostname or any(character.isspace() for character in value):
+            raise ValueError("must be an absolute HTTP(S) application URL")
         return value
 
 
@@ -88,20 +141,29 @@ class SearchResponse(BaseModel):
 
 def search_query(request: SearchRequest) -> tuple[str, list, str]:
     """One shared query for the API, tests, benchmarks, and EXPLAIN capture."""
-    keywords = generate_keywords(request.profile)
-    city = normalize_location(request.profile.get("location") or "")
+    keywords, kind = candidate_terms(request.profile)
+    city = normalize_city(request.profile.get("location") or "")
     if city in {"india", "null", "none", "n/a"}:
         city = ""
-    fingerprint = hashlib.sha256(json.dumps([request.country_code, city, keywords]).encode()).hexdigest()[:16]
+    fingerprint = hashlib.sha256(json.dumps([request.country_code, city, keywords, kind]).encode()).hexdigest()[:16]
     clauses = ["is_active", "country_code = %s"]
-    params: list = [request.country_code]
+    prefix, source, score = "", "jobs", "0"
+    params: list = []
+    if keywords:
+        terms = " || ".join("plainto_tsquery('simple', %s)" for _ in keywords)
+        prefix = f"WITH criteria AS (SELECT ({terms}) AS query) "
+        source = "jobs CROSS JOIN criteria"
+        params.extend(keywords)
+        clauses.append("search_document @@ criteria.query")
+        title_weight, text_weight = (15, 7) if kind == "role" else (10, 4)
+        # Eligibility is enforced in WHERE, before LIMIT. Scores use the very same
+        # tsquery (including matches spanning title and description), never employer names.
+        score = f"""CASE WHEN to_tsvector('simple', title) @@ criteria.query
+                    THEN {title_weight} ELSE {text_weight} END"""
+    params.append(request.country_code)
     if city:
         clauses.append("city_key = %s")
         params.append(city)
-    if keywords:
-        terms = " || ".join("plainto_tsquery('simple', %s)" for _ in keywords)
-        clauses.append(f"search_document @@ ({terms})")
-        params.extend(keywords)
     if request.cursor:
         try:
             stamp, job_id, previous = json.loads(base64.urlsafe_b64decode(request.cursor.encode()))
@@ -113,8 +175,9 @@ def search_query(request: SearchRequest) -> tuple[str, list, str]:
         clauses.append("(posted_at, id) < (%s, %s)")
         params.extend([stamp, job_id])
     params.append(request.limit + 1)
-    query = f"""SELECT id, title, company, location, source, url, description, salary, posted_at
-                FROM jobs WHERE {' AND '.join(clauses)}
+    query = f"""{prefix}SELECT id, title, company, location, source, url, description, salary, posted_at,
+                {score} AS candidate_score
+                FROM {source} WHERE {' AND '.join(clauses)}
                 ORDER BY posted_at DESC, id DESC LIMIT %s"""
     return query, params, fingerprint
 
@@ -128,7 +191,7 @@ class JobRepository:
         # Refresh preserves its original posted_at unless an explicit source date is supplied.
         with self.pool.connection() as conn, conn.cursor() as cursor:
             for job in jobs:
-                city_key = normalize_location(job.city or job.location)
+                city_key = normalize_city(job.city or job.location)
                 identity = hashlib.sha256(json.dumps([
                     normalize_location(job.title), normalize_location(job.company),
                     city_key, job.country_code,
@@ -160,7 +223,14 @@ class JobRepository:
             next_cursor = base64.urlsafe_b64encode(json.dumps([
                 last["posted_at"].isoformat(), last["id"], fingerprint,
             ]).encode()).decode()
-        jobs = [JobResult(**row, relevance_score=score_relevance(row, request.profile)) for row in rows]
+        # Keep the legacy skills/certification/education/experience/language bonuses,
+        # but replace its literal role/skill substring score with the eligibility score.
+        _, kind = candidate_terms(request.profile)
+        bonus_profile = dict(request.profile, role=None)
+        if kind == "skills":
+            bonus_profile["skills"] = []
+        bonus_profile["location"] = normalize_city(request.profile.get("location") or "")
+        jobs = [JobResult(**row, relevance_score=row["candidate_score"] + score_relevance(row, bonus_profile)) for row in rows]
         return SearchResponse(jobs=jobs, count=len(jobs), next_cursor=next_cursor)
 
 

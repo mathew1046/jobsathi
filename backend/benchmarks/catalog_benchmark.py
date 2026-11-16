@@ -21,6 +21,15 @@ from app.persistence import create_pool, database_url
 
 HERE = Path(__file__).resolve().parent
 CASES = {
+    "frontend_driver_bengaluru": {
+        "profile": {
+            "name": "Arun Kumar", "role": "Professional Driver", "location": "Bengaluru, Karnataka",
+            "skills": ["Two Wheeler Driving", "Customer Communication"], "experience_years": 3,
+            "experience_details": [{"role": "Delivery Driver", "company": "Acme Logistics"}],
+            "education": [{"degree": "Secondary School"}], "certifications": ["Driving Licence"],
+            "languages": ["Kannada", "Hindi"],
+        }, "limit": 50,
+    },
     "driver_bengaluru": {"profile": {"role": "Driver", "location": "Bengaluru"}, "limit": 50},
     "plumber_pune": {"profile": {"role": "Plumber", "location": "Pune"}, "limit": 50},
     "electrician_india": {"profile": {"role": "Electrician", "location": "India"}, "limit": 50},
@@ -66,11 +75,16 @@ def environment(conn):
 def measure(args, url):
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
+    if (output / f"{args.phase}.json").exists():
+        raise RuntimeError("Evidence already exists; choose a new --output directory instead of overwriting it")
     result = {
         "phase": args.phase, "started_at": datetime.now(timezone.utc).isoformat(),
         "warmups": args.warmups, "repetitions": args.repetitions, "concurrency": 1,
         "http_base_url": args.base_url, "cache_policy": "warm, no cache eviction; identical warmups for both phases",
         "seed_sha256": hashlib.sha256((HERE / "seed.sql").read_bytes()).hexdigest(),
+        "source_sha256": {name: hashlib.sha256((HERE.parent / name).read_bytes()).hexdigest() for name in (
+            "app/job_catalog.py", "app/job_search.py", "app/persistence.py", "benchmarks/catalog_benchmark.py",
+        )},
         "cases": {},
     }
     with create_pool(url) as pool, pool.connection() as conn, httpx.Client(base_url=args.base_url, timeout=30) as client:
@@ -123,7 +137,7 @@ def measure(args, url):
 def compare(args):
     before = json.loads((args.output / "before.json").read_text())
     after = json.loads((args.output / "after.json").read_text())
-    for key in ("dataset", "seed_sha256", "warmups", "repetitions", "concurrency", "http_base_url", "cache_policy"):
+    for key in ("dataset", "seed_sha256", "source_sha256", "warmups", "repetitions", "concurrency", "http_base_url", "cache_policy"):
         if before[key] != after[key]:
             raise RuntimeError(f"Benchmark conditions differ: {key}")
     for key in ("postgresql", "cpu", "logical_cpus", "memory_total", "settings", "heap_bytes", "python"):
@@ -157,7 +171,7 @@ def main():
     parser.add_argument("--base-url", default="http://127.0.0.1:8011")
     parser.add_argument("--warmups", type=int, default=10)
     parser.add_argument("--repetitions", type=int, default=100)
-    parser.add_argument("--output", type=Path, default=HERE / "results")
+    parser.add_argument("--output", type=Path, default=HERE / "results" / "review")
     args = parser.parse_args()
     if args.action == "compare":
         compare(args)
